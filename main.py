@@ -815,6 +815,7 @@ class SpeechSoundPlugin(Star):
             ("/status", self.api_status, ["GET"]),
             ("/config", self.api_config, ["GET"]),
             ("/config/save", self.api_save_config, ["POST"]),
+            ("/config/clear_key", self.api_clear_key, ["POST"]),
             ("/voices", self.api_voices, ["GET"]),
             ("/voices/pull", self.api_pull_voices, ["POST"]),
             ("/voices/scene", self.api_set_scene_voice, ["POST"]),
@@ -916,6 +917,20 @@ class SpeechSoundPlugin(Star):
         self._drop_provider_cache()
         saved = await self._persist_config()
         return self._json({"code": 0, "data": {"saved": saved, "applied": sorted(data)}})
+
+    async def api_clear_key(self):
+        """面板里清空已保存的密钥。
+
+        密钥留空等于「不修改」，所以清空必须走单独一条路，否则换了后端之后
+        旧 key 会一直带着。
+        """
+        try:
+            self.config.update({"api_key": ""})
+        except Exception as exc:
+            return self._fail("清除失败：%s" % exc)
+        self._drop_provider_cache()
+        saved = await self._persist_config()
+        return self._json({"code": 0, "data": {"saved": saved, "cleared": True}})
 
     async def api_voices(self):
         return self._json(

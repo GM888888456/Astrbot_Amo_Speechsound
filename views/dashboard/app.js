@@ -203,6 +203,14 @@ function collectConfig() {
   return payload;
 }
 
+$("clearKey").addEventListener("click", async () => {
+  if (!confirm("清除已保存的 API Key？")) return;
+  const res = await apiPost("config/clear_key", {});
+  $("saveHint").textContent = res ? "密钥已清除。" : "清除失败。";
+  $("keyHint").textContent = "密钥已清除，重新填写后再保存。";
+  loadStatus();
+});
+
 $("save").addEventListener("click", async () => {
   const btn = $("save");
   btn.disabled = true;

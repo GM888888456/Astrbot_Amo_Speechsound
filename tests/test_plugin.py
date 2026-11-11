@@ -416,6 +416,20 @@ class ConfigTests(PluginTestBase):
         self.assertIs(self.config["group_enable"], False)
 
 
+class ClearKeyTests(PluginTestBase):
+    def test_clear_key(self):
+        self.config["api_key"] = "brz_secret"
+        self.plugin._drop_provider_cache()
+        data = asyncio.get_event_loop().run_until_complete(self.plugin.api_clear_key())
+        self.assertEqual(data["code"], 0)
+        self.assertEqual(self.config["api_key"], "")
+
+    def test_clear_key_persists(self):
+        self.config["api_key"] = "brz_secret"
+        asyncio.get_event_loop().run_until_complete(self.plugin.api_clear_key())
+        self.assertTrue(self.config.save_config())
+
+
 class HelperTests(PluginTestBase):
     def test_mask_key(self):
         self.config["api_key"] = "brz_1234567890abcdef"
