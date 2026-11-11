@@ -1,0 +1,150 @@
+{
+  "enable": {
+    "type": "bool",
+    "description": "启用语音",
+    "default": true,
+    "hint": "总开关。关掉后 Amo 调不动语音，也不会有兜底转语音。"
+  },
+  "provider": {
+    "type": "string",
+    "description": "语音后端",
+    "default": "breeze",
+    "options": [
+      "breeze",
+      "edge",
+      "openai"
+    ],
+    "hint": "breeze=Breeze Blue（表演感最好，要自己的 key）；edge=微软 Edge TTS（免费、零配置、音色固定）；openai=OpenAI 兼容 /audio/speech。"
+  },
+  "api_base": {
+    "type": "string",
+    "description": "接口地址",
+    "default": "https://api.breeze.blue",
+    "hint": "breeze 默认 https://api.breeze.blue；openai 填兼容网关的 /v1 前缀。"
+  },
+  "api_key": {
+    "type": "string",
+    "description": "API Key",
+    "default": "",
+    "hint": "Breeze Blue 的 key 形如 brz_...（在 breezeblue.ai 的 API 密钥页创建，免费账户每天有额度）。edge 不需要。"
+  },
+  "model_id": {
+    "type": "string",
+    "description": "模型",
+    "default": "",
+    "hint": "留空自动。breeze 可选 breeze-tts-2 / breeze-tts-2-multilingual；openai 填 tts-1 之类。"
+  },
+  "default_voice": {
+    "type": "string",
+    "description": "默认音色",
+    "default": "",
+    "hint": "在面板「音色」页拉取后选择，不用手填。留空时用后端推荐音色。"
+  },
+  "language_code": {
+    "type": "string",
+    "description": "语言",
+    "default": "zh",
+    "hint": "两位语言码，留空自动。"
+  },
+  "instructions_default": {
+    "type": "text",
+    "description": "默认表演指令",
+    "default": "",
+    "hint": "Amo 没给语气时用这句。例如「像在深夜小声说话，气声多一点，语速偏慢」。"
+  },
+  "speed": {
+    "type": "float",
+    "description": "语速",
+    "default": 1.0,
+    "hint": "0.5–2.0，1.0 正常。"
+  },
+  "volume": {
+    "type": "float",
+    "description": "音量",
+    "default": 1.0,
+    "hint": "0.1–2.0。"
+  },
+  "timeout": {
+    "type": "int",
+    "description": "请求超时（秒）",
+    "default": 30
+  },
+  "max_chars": {
+    "type": "int",
+    "description": "每段字数上限",
+    "default": 80,
+    "hint": "单段最多念多少字。整条语音的总长上限 = 这个数 × 最多分段数（默认 80 × 2 = 160 字），超过就退回文字。"
+  },
+  "max_segments": {
+    "type": "int",
+    "description": "最多分段数",
+    "default": 2,
+    "hint": "长句按标点切段，最多切几段。切段是为了不把一句话念到一半断掉。"
+  },
+  "speak_threshold": {
+    "type": "float",
+    "description": "开口阈值",
+    "default": 0.6,
+    "hint": "0–1。越高越少开口。Amo 主动调用时不受这个限制，只受限硬规则。"
+  },
+  "auto_fallback": {
+    "type": "bool",
+    "description": "兜底转语音",
+    "default": false,
+    "hint": "关掉时完全由 Amo 决定（推荐）。打开后：用户明说「用语音说」但 Amo 只回了文字，插件自动把这条转成语音。"
+  },
+  "group_enable": {
+    "type": "bool",
+    "description": "允许群聊发语音",
+    "default": false,
+    "hint": "默认关。群里刷语音很招人烦，要开请自己想清楚。"
+  },
+  "daily_quota": {
+    "type": "int",
+    "description": "每天语音条数上限",
+    "default": 40,
+    "hint": "按会话算，防止额度被烧穿。0 = 不限。"
+  },
+  "cooldown_seconds": {
+    "type": "int",
+    "description": "两条语音最小间隔（秒）",
+    "default": 240,
+    "hint": "防止连着刷语音。"
+  },
+  "dual_output": {
+    "type": "bool",
+    "description": "语音之外同时发文字",
+    "default": false,
+    "hint": "打开后语音和文字都发；关掉只发语音。"
+  },
+  "keep_audio": {
+    "type": "bool",
+    "description": "保留音频文件",
+    "default": false,
+    "hint": "关掉时发完即删，只留最近几条方便排查。"
+  },
+  "edge_fallback": {
+    "type": "bool",
+    "description": "失败时用 Edge 兜底",
+    "default": true,
+    "hint": "Breeze 挂了/额度用完/超时，自动换微软音色念出来，不报错给用户。"
+  },
+  "edge_voice": {
+    "type": "string",
+    "description": "兜底音色",
+    "default": "zh-CN-XiaoxiaoNeural",
+    "hint": "Edge 兜底时用的音色，例如 zh-CN-XiaoxiaoNeural、zh-CN-XiaoyiNeural。"
+  },
+  "read_relation": {
+    "type": "bool",
+    "description": "参考关系度决定语气",
+    "default": true,
+    "hint": "从陪伴插件读当前关系阶段，越亲近越容易开口、语气越软。"
+  },
+  "schedule_aware": {
+    "type": "bool",
+    "description": "参考日程决定场景",
+    "default": true,
+    "hint": "从陪伴插件读「在家/在外面/在睡觉」，切到对应场景音色。"
+  }
+}

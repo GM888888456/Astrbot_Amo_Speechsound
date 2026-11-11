@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f4f4f6" />
+  <title>我想和你说说话</title>
+  <link rel="stylesheet" href="./style.css?v=1.0.0" />
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand"><span class="dot"></span><span>我想和你说说话</span></div>
+      <button class="icon-btn" id="theme" title="切换深浅色">◐</button>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab on" data-tab="status">概览</button>
+      <button class="tab" data-tab="config">配置</button>
+      <button class="tab" data-tab="voices">音色</button>
+      <button class="tab" data-tab="history">记录</button>
+    </nav>
+
+    <section class="pane" id="pane-status">
+      <div class="card">
+        <div class="card-title">
+          <span>声音</span>
+          <span class="pill" id="enablePill">…</span>
+        </div>
+        <dl class="kv">
+          <dt>后端</dt><dd id="providerName">—</dd>
+          <dt>地址</dt><dd id="apiBase">—</dd>
+          <dt>密钥</dt><dd id="keyMasked">—</dd>
+          <dt>默认音色</dt><dd id="defaultVoice">—</dd>
+          <dt>今日</dt><dd id="usedToday">—</dd>
+          <dt>上次开口</dt><dd id="lastSpoke">—</dd>
+          <dt>陪伴插件</dt><dd id="companionState">—</dd>
+        </dl>
+        <div class="meta" id="statusMeta">加载中…</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><span>试听</span><span class="hint" id="testHint">用当前音色说一句</span></div>
+        <div class="field">
+          <input id="testText" spellcheck="false" placeholder="你好呀，我是来试音的。" />
+        </div>
+        <div class="row">
+          <button class="btn" id="testBtn">念一句</button>
+          <span class="hint" id="testMeta"></span>
+        </div>
+        <audio id="testAudio" controls hidden></audio>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><span>她会怎么开口</span></div>
+        <div class="meta" id="policyMeta">
+          由 Amo 自己决定。她调用语音时插件只拦硬伤（太长 / 群聊没开 / 额度用完）。
+        </div>
+      </div>
+    </section>
+
+    <section class="pane" id="pane-config" hidden>
+      <div class="card">
+        <div class="card-title"><span>后端</span><span class="hint">换后端要重新拉音色</span></div>
+        <div class="field">
+          <label>类型</label>
+          <select id="provider">
+            <option value="breeze">breeze（Breeze Blue，表演感最好）</option>
+            <option value="openai">openai（兼容 /audio/speech）</option>
+            <option value="edge">edge（微软，免费兜底）</option>
+          </select>
+        </div>
+        <div class="field"><label>api_base</label><input id="api_base" spellcheck="false" placeholder="https://api.breeze.blue" /></div>
+        <div class="field">
+          <label>api_key</label>
+          <input id="api_key" type="password" spellcheck="false" placeholder="留空 = 不修改" />
+          <div class="meta" id="keyHint">Breeze Blue 的 key 形如 brz_…，在 breezeblue.ai 的 API 密钥页创建。egde 不需要。</div>
+        </div>
+        <div class="field"><label>model_id</label><input id="model_id" spellcheck="false" placeholder="留空自动" /></div>
+        <div class="field">
+          <label>默认音色（拉取后选择）</label>
+          <div class="row">
+            <select id="default_voice" class="grow"><option value="">还没拉取</option></select>
+            <button class="link" id="pullFromConfig" type="button">拉取</button>
+          </div>
+        </div>
+        <div class="field"><label>语言</label><input id="language_code" spellcheck="false" placeholder="zh" /></div>
+        <div class="field">
+          <label>默认表演指令</label>
+          <textarea id="instructions_default" rows="2" spellcheck="false" placeholder="像在深夜小声说话，气声多一点，语速偏慢"></textarea>
+        </div>
+        <div class="grid2">
+          <div class="field"><label>语速</label><input id="speed" type="number" step="0.05" min="0.5" max="2" /></div>
+          <div class="field"><label>音量</label><input id="volume" type="number" step="0.05" min="0.1" max="2" /></div>
+          <div class="field"><label>超时（秒）</label><input id="timeout" type="number" min="5" /></div>
+          <div class="field"><label>字数上限</label><input id="max_chars" type="number" min="10" /></div>
+          <div class="field"><label>最多分段</label><input id="max_segments" type="number" min="1" /></div>
+          <div class="field"><label>开口阈值</label><input id="speak_threshold" type="number" step="0.05" min="0" max="1" /></div>
+          <div class="field"><label>每日条数</label><input id="daily_quota" type="number" min="0" /></div>
+          <div class="field"><label>最小间隔（秒）</label><input id="cooldown_seconds" type="number" min="0" /></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><span>开关</span></div>
+        <label class="check"><input type="checkbox" id="enable" /> 启用语音</label>
+        <label class="check"><input type="checkbox" id="auto_fallback" /> 兜底转语音（用户明说要语音、但 Amo 只回了文字时补一条）</label>
+        <label class="check"><input type="checkbox" id="group_enable" /> 允许群聊发语音</label>
+        <label class="check"><input type="checkbox" id="dual_output" /> 语音之外同时发文字</label>
+        <label class="check"><input type="checkbox" id="keep_audio" /> 保留音频文件</label>
+        <label class="check"><input type="checkbox" id="edge_fallback" /> 失败时用 Edge 兜底</label>
+        <label class="check"><input type="checkbox" id="read_relation" /> 参考关系度决定语气</label>
+        <label class="check"><input type="checkbox" id="schedule_aware" /> 参考日程决定场景</label>
+        <div class="grid2">
+          <div class="field"><label>兜底音色</label><input id="edge_voice" spellcheck="false" placeholder="zh-CN-XiaoxiaoNeural" /></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <button class="btn" id="save">保存</button>
+        <span class="hint" id="saveHint"></span>
+      </div>
+    </section>
+
+    <section class="pane" id="pane-voices" hidden>
+      <div class="card">
+        <div class="card-title">
+          <span>音色</span>
+          <span class="hint" id="voiceMeta">还没拉取</span>
+        </div>
+        <div class="row">
+          <button class="btn" id="pullVoices">拉取音色</button>
+          <input id="voiceSearch" class="grow" spellcheck="false" placeholder="按名字过滤" />
+        </div>
+        <div class="meta" id="voiceHint">点「拉取」从账号读取可用音色，不用手抄 voice_id。</div>
+        <ul class="list" id="voiceList"><li class="empty">还没有音色，先拉取</li></ul>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><span>场景分配</span><span class="hint">不同场景用不同声音</span></div>
+        <div class="hint" id="sceneHint">选一个场景，再点下面音色里的「设为这个场景」。</div>
+        <div class="chips" id="sceneChips"></div>
+        <div class="meta" id="sceneMap"></div>
+      </div>
+    </section>
+
+    <section class="pane" id="pane-history" hidden>
+      <div class="card">
+        <div class="card-title"><span>最近</span><span class="hint">为什么发 / 为什么没发</span></div>
+        <ul class="list" id="history"><li class="empty">暂无记录</li></ul>
+        <button class="link" id="refreshHistory" type="button">刷新</button>
+      </div>
+    </section>
+
+    <div class="foot">我想和你说说话 · 反馈群 1055679275</div>
+  </div>
+  <script src="./app.js?v=1.0.0"></script>
+</body>
+</html>
