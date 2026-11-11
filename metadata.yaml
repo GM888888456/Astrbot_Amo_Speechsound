@@ -2,7 +2,7 @@ name: Astrbot_Amo_Speechsound
 display_name: 我想和你说说话
 desc: 我想和你说说话：给陪伴插件（Astrbot_Amo_forever）配一副声音，Amo 自己决定什么时候开口、用什么音色、带什么语气，插件只负责把关和出声
 short_desc: 我想和你说说话
-version: 1.1.1
+version: 1.1.2
 author: 墨辞烟
 astrbot_version: ">=4.5.7"
 repo: https://github.com/GM888888456/Astrbot_Amo_Speechsound/

@@ -80,7 +80,7 @@ except Exception:  # pragma: no cover - 直接以脚本方式加载时
     )
 
 PLUGIN_NAME = "Astrbot_Amo_Speechsound"
-PLUGIN_VERSION = "1.1.1"
+PLUGIN_VERSION = "1.1.2"
 DISPLAY_NAME = "我想和你说说话"
 
 #: 面板可以改的字段（白名单）。加字段时两边一起改。
@@ -126,6 +126,8 @@ class SpeechSoundPlugin(Star):
         self._voices: dict[str, Any] = {"fetched_at": 0, "provider": "", "items": []}
         self._provider_cache: tuple[str, Any] | None = None
         self._pending_voice: dict[str, str] = {}
+        self._llm_text: dict[str, tuple[str, float]] = {}
+        self._spoken_events: set[str] = set()
         self._load_state()
         self._load_voices()
         self._register_web_apis()
@@ -300,6 +302,43 @@ class SpeechSoundPlugin(Star):
             per = self._state.setdefault("last_ts_by_umo", {})
             per[str(umo)] = self._state["last_ts"]
         self._save_state()
+
+    async def _speak_safe(
+        self,
+        event: AstrMessageEvent,
+        text: str,
+        *,
+        source: str = "tool",
+        instructions: str | None = None,
+        scene: str | None = None,
+        manual: bool = False,
+    ) -> dict[str, Any]:
+        """出声；出不了声而本轮又只等语音时，把文字补上，别让他干等。"""
+        result = await self.speak(
+            event, text, instructions=instructions, scene=scene,
+            manual=manual, source=source, with_text=False,
+        )
+        if result.get("ok"):
+            return result
+        if getattr(event, "amo_voice_reply_only", False):
+            try:
+                await event.send(event.chain_result([Plain(text=text)]))
+                logger.info(
+                    "[amo_voice] 出不了声，改发文字（%s）" % str(result.get("reason"))[:60]
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("[amo_voice] 补发文字失败: %s" % exc)
+        return result
+
+    def _mark_spoken(self, event: AstrMessageEvent) -> None:
+        """记下这条事件已经出过声，兜底别再补一条。"""
+        try:
+            key = str(id(event))
+            self._spoken_events.add(key)
+            if len(self._spoken_events) > 64:
+                self._spoken_events = set(list(self._spoken_events)[-32:])
+        except Exception:
+            pass
 
     def _spawn(self, coro):
         """把合成丢到后台，别卡住主回复。"""
@@ -596,9 +635,13 @@ class SpeechSoundPlugin(Star):
     # 发送
     # ------------------------------------------------------------------
 
-    async def _send_voice(self, event: AstrMessageEvent, path: str, text: str) -> None:
+    async def _send_voice(
+        self, event: AstrMessageEvent, path: str, text: str, plain: bool | None = None
+    ) -> None:
         chain = [Record(file=path, text=text)]
-        if self._bool("dual_output", False):
+        # 兜底补语音时文字已经发过了，这里默认不再重复发一遍文字
+        want_plain = self._bool("dual_output", False) if plain is None else bool(plain)
+        if want_plain:
             chain = [Plain(text=text), *chain]
         await event.send(event.chain_result(chain))
 
@@ -611,6 +654,7 @@ class SpeechSoundPlugin(Star):
         scene: str | None = None,
         manual: bool = True,
         source: str = "tool",
+        with_text: bool | None = None,
     ) -> dict[str, Any]:
         """对外唯一入口：判断 → 合成 → 发送 → 记账。
 
@@ -620,8 +664,11 @@ class SpeechSoundPlugin(Star):
         if not self._bool("enable", True):
             return {"ok": False, "reason": "语音功能已关闭"}
 
+        self._mark_spoken(event)
+
         ctx = self._context_for(event, text)
-        decision: Decision = decide(ctx, manual=manual)
+        # 兜底路径已经按「用户明说要语音」放行过，别再被打分拦一次
+        decision: Decision = decide(ctx, manual=manual, ignore_score=(source == "fallback"))
         if scene:
             decision.scene = scene
         if not decision.allowed:
@@ -670,7 +717,7 @@ class SpeechSoundPlugin(Star):
                 )
                 paths.append(self._write_audio(result.audio, result.extension))
             for path in paths:
-                await self._send_voice(event, path, spoken)
+                await self._send_voice(event, path, spoken, plain=with_text)
         except SpeechError as exc:
             logger.warning("[amo_voice] 合成失败：%s" % exc)
             self._remember(
@@ -767,8 +814,9 @@ class SpeechSoundPlugin(Star):
         decision = decide(self._context_for(event, text), manual=True)
         if not decision.allowed:
             return "这条没能发成语音：%s。用文字回复就行。" % decision.reason
+        self._mark_spoken(event)
         self._spawn(
-            self.speak(
+            self._speak_safe(
                 event,
                 text,
                 instructions=mood.strip() or None,
@@ -799,32 +847,71 @@ class SpeechSoundPlugin(Star):
     # 兜底：Amo 没调工具、但用户明说要语音
     # ------------------------------------------------------------------
 
+    @filter.on_llm_response()
+    async def on_llm_response(self, event: AstrMessageEvent, resp):
+        """留下这一轮模型说的话。
+
+        陪伴插件（Astrbot_Amo_forever）开了分段回复时会自己把 result.chain 清空再直发，
+        所以发送前钩子里经常读不到文字；兜底只能靠这里留的这份。
+        """
+        try:
+            text = str(getattr(resp, "completion_text", "") or "").strip()
+            if not text:
+                chain = getattr(resp, "result_chain", None)
+                pieces = []
+                for comp in (getattr(chain, "chain", None) or []):
+                    value = getattr(comp, "text", None)
+                    if value:
+                        pieces.append(str(value))
+                text = "".join(pieces).strip()
+            if not text:
+                return
+            key = str(id(event))
+            self._llm_text[key] = (text, _now())
+            if len(self._llm_text) > 64:
+                keep = sorted(self._llm_text, key=lambda k: self._llm_text[k][1])[-32:]
+                self._llm_text = {k: self._llm_text[k] for k in keep}
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[amo_voice] 记录模型输出失败: %s" % exc)
+
     @filter.on_decorating_result()
     async def on_decorating_result(self, event: AstrMessageEvent):
         try:
+            key = str(id(event))
             result = event.get_result()
-            if not result or not result.chain:
-                return
-            try:
-                if not result.is_llm_result():
-                    return
-            except Exception:
-                pass
+            text = ""
+            if result is not None and getattr(result, "chain", None):
+                try:
+                    if not result.is_llm_result():
+                        return
+                except Exception:
+                    pass
+                text = "".join(
+                    comp.text for comp in result.chain if isinstance(comp, Plain)
+                ).strip()
 
-            text = "".join(
-                comp.text for comp in result.chain if isinstance(comp, Plain)
-            ).strip()
+            captured, captured_ts = self._llm_text.pop(key, ("", 0.0))
+            if not text:
+                # 陪伴插件把 chain 清空了自己发 → 用 on_llm_response 留的那份
+                if captured and (_now() - captured_ts) < 180:
+                    text = captured
+                else:
+                    return
+
+            # 这一轮已经出过声（amo_speak / 指令），别再补一条
+            if key in self._spoken_events:
+                self._spoken_events.discard(key)
+                return
 
             # 这一段已经用语音发过了：把文字撤掉，避免语音+文字各来一遍
-            spoken = self._pending_voice.pop(str(id(event)), "")
+            spoken = self._pending_voice.pop(key, "")
             if spoken and not self._bool("dual_output", False):
                 if text and (text in spoken or spoken in text):
-                    result.chain = []
+                    if result is not None and getattr(result, "chain", None):
+                        result.chain = []
                     return
 
             if not self._bool("auto_fallback", False):
-                return
-            if not text:
                 return
             if not self._user_asked_for_voice(event):
                 return
@@ -833,8 +920,8 @@ class SpeechSoundPlugin(Star):
             if not decision.allowed:
                 logger.info("[amo_voice] 兜底不放行：%s" % decision.reason)
                 return
-            # 用户明说要语音 → 不再打分，直接后台合成；文字照常留着
-            self._spawn(self.speak(event, text, manual=False, source="fallback"))
+            logger.info("[amo_voice] 兜底补语音：%s" % text[:40])
+            self._spawn(self._speak_safe(event, text, manual=False, source="fallback"))
 
         except Exception as exc:  # noqa: BLE001
             logger.debug("[amo_voice] 兜底判断失败: %s" % exc)
@@ -845,7 +932,10 @@ class SpeechSoundPlugin(Star):
             body = str(getattr(event, "message_str", "") or "")
         except Exception:
             return False
-        words = ("语音", "发条音", "念给我", "读给我", "读一下", "说句话", "说给我听", "用声音")
+        words = (
+            "语音", "发条音", "念给我", "读给我", "读一下", "说句话", "说给我听",
+            "用声音", "你的声音", "想听你说", "想听听", "录音",
+        )
         return any(word in body for word in words)
 
     @filter.on_llm_request()
