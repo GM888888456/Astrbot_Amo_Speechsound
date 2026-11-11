@@ -125,9 +125,9 @@
   },
   "edge_fallback": {
     "type": "bool",
-    "description": "失败时用 Edge 兜底",
+    "description": "失败时自动兜底",
     "default": true,
-    "hint": "Breeze 挂了/额度用完/超时，自动换微软音色念出来，不报错给用户。"
+    "hint": "主后端超时/5xx/额度用完时，先用 AstrBot 里已配置的 TTS provider，再退到 Edge 朗读（需 pip install edge-tts）。4xx 这类配置错误不兜底，免得掩盖真问题。"
   },
   "edge_voice": {
     "type": "string",

@@ -208,6 +208,10 @@ class PluginTestBase(unittest.TestCase):
             )
 
         self.plugin._synthesize = fake_synth  # type: ignore[assignment]
+        # 兜底逻辑本身也要测，所以要留一份没被打桩的原方法
+        self.real_synthesize = plugin_main.SpeechSoundPlugin._synthesize.__get__(
+            self.plugin, plugin_main.SpeechSoundPlugin
+        )
 
     def tearDown(self):
         shutil.rmtree(self.root, ignore_errors=True)
@@ -298,6 +302,57 @@ class WorkflowTests(PluginTestBase):
         asyncio.get_event_loop().run_until_complete(self.plugin.speak(FakeEvent(), "晚安啦"))
         files = os.listdir(self.plugin._audio_dir())
         self.assertTrue(any(name.startswith("voice-") for name in files))
+
+
+class FallbackTests(PluginTestBase):
+    def _failing_primary(self):
+        class Primary:
+            name = "breeze"
+
+            async def synthesize(self, request):
+                raise SpeechError("HTTP 503", status=503, retryable=True)
+
+        self.plugin._provider = lambda: Primary()  # type: ignore[assignment]
+
+    def test_falls_back_to_framework_tts(self):
+        """主后端 5xx 时先用 AstrBot 已配置的 TTS，不逼用户装包。"""
+        self._failing_primary()
+
+        class FakeTTS:
+            model = "edge_tts"
+
+            async def get_audio(self, text):
+                path = os.path.join(self.root, "framework.wav")
+                with open(path, "wb") as fh:
+                    fh.write(b"RIFF" + b"\0" * 32)
+                return path
+
+        fake = FakeTTS()
+        fake.root = self.root
+
+        async def getter(umo=None):
+            return fake
+
+        self.context.get_using_tts_provider_async = getter  # type: ignore[attr-defined]
+
+        result, used = asyncio.get_event_loop().run_until_complete(
+            self.real_synthesize("晚安", "sleep", "voc_1", "困")
+        )
+        self.assertEqual(used, "framework")
+        self.assertTrue(result.audio.startswith(b"RIFF"))
+
+    def test_non_retryable_error_does_not_fall_back(self):
+        class Primary:
+            name = "breeze"
+
+            async def synthesize(self, request):
+                raise SpeechError("HTTP 401", status=401, retryable=False)
+
+        self.plugin._provider = lambda: Primary()  # type: ignore[assignment]
+        with self.assertRaises(SpeechError):
+            asyncio.get_event_loop().run_until_complete(
+                self.real_synthesize("晚安", "sleep", "voc_1", "困")
+            )
 
 
 class PanelTests(PluginTestBase):

@@ -54,6 +54,7 @@ try:
     from .providers import (
         SpeechError,
         SpeechRequest,
+        SpeechResult,
         build_provider,
         BreezeProvider,
         EdgeProvider,
@@ -72,6 +73,7 @@ except Exception:  # pragma: no cover - 直接以脚本方式加载时
     from providers import (  # type: ignore
         SpeechError,
         SpeechRequest,
+        SpeechResult,
         build_provider,
         BreezeProvider,
         EdgeProvider,
@@ -441,8 +443,47 @@ class SpeechSoundPlugin(Star):
     # 合成
     # ------------------------------------------------------------------
 
+    async def _framework_tts(self, text: str):
+        """用 AstrBot 里已经配好的 TTS provider 兜底。
+
+        比 Edge 更适合当第一顺位兜底：用户既然在 AstrBot 里配过，就用它，不额外
+        要求装包，也不锁定某一家。
+        """
+        getter = getattr(self.context, "get_using_tts_provider_async", None)
+        if not callable(getter):
+            return None
+        try:
+            provider = await getter(None)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[amo_voice] 读取框架 TTS provider 失败: %s" % exc)
+            return None
+        if provider is None:
+            return None
+        try:
+            path = await provider.get_audio(text)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[amo_voice] 框架 TTS 合成失败: %s" % exc)
+            return None
+        if not path:
+            return None
+        try:
+            with open(str(path), "rb") as fh:
+                data = fh.read()
+        except OSError as exc:
+            logger.warning("[amo_voice] 读不到框架 TTS 的音频: %s" % exc)
+            return None
+        if not data:
+            return None
+        ext = os.path.splitext(str(path))[1].lower().lstrip(".") or "wav"
+        return SpeechResult(
+            audio=data,
+            fmt=ext,
+            provider="framework",
+            voice=str(getattr(provider, "model", "") or ""),
+        )
+
     async def _synthesize(self, text: str, scene: str, voice: str, instructions: str):
-        """主后端合成；失败且开了兜底就换 Edge 再来一次。"""
+        """主后端合成；失败且开了兜底，先试框架自带 TTS，再试 Edge。"""
         provider = self._provider()
         request = SpeechRequest(
             text=text,
@@ -463,7 +504,12 @@ class SpeechSoundPlugin(Star):
             )
             if not fallback_ok:
                 raise
-            logger.warning("[amo_voice] %s 合成失败，改用 Edge 兜底：%s" % (provider.name, exc))
+            logger.warning("[amo_voice] %s 合成失败，准备兜底：%s" % (provider.name, exc))
+
+            result = await self._framework_tts(text)
+            if result is not None:
+                return result, "framework"
+
             edge = EdgeProvider(
                 {
                     "timeout": self._int("timeout", 30),
@@ -789,6 +835,10 @@ class SpeechSoundPlugin(Star):
                     logger.warning("[amo_voice] 面板接口 %s 兼容注册失败: %s" % (path, exc))
             except Exception as exc:
                 logger.warning("[amo_voice] 面板接口 %s 注册失败: %s" % (path, exc))
+        logger.info(
+            "[amo_voice] %s %s 已加载：面板 %d 条接口，音色 %d 个"
+            % (DISPLAY_NAME, PLUGIN_VERSION, len(routes), len(self._voices.get("items") or []))
+        )
 
     async def api_status(self):
         items = self._voices.get("items") or []

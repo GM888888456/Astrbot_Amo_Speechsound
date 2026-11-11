@@ -114,26 +114,30 @@ class BreezeTests(unittest.TestCase):
 
 
 class EdgeTests(unittest.TestCase):
-    def test_ssml_escapes(self):
-        ssml = EdgeProvider._ssml("a & b < c", "zh-CN-XiaoxiaoNeural", 1.0, 1.0)
-        self.assertIn("&amp;", ssml)
-        self.assertIn("&lt;", ssml)
-        self.assertIn("XiaoxiaoNeural", ssml)
-
-    def test_ssml_rate(self):
-        ssml = EdgeProvider._ssml("你好", "zh-CN-XiaoxiaoNeural", 0.8, 1.0)
-        self.assertIn("rate='-20%'", ssml)
-
-    def test_sec_ms_gec_stable_within_window(self):
-        first = EdgeProvider._sec_ms_gec()
-        second = EdgeProvider._sec_ms_gec()
-        self.assertEqual(first, second)
-        self.assertEqual(len(first), 64)
-
     def test_voice_list_not_empty(self):
         provider = EdgeProvider({"timeout": 10})
         self.assertTrue(provider.VOICES)
         self.assertEqual(provider.default_voice, "zh-CN-XiaoxiaoNeural")
+
+    def test_rate_string(self):
+        self.assertEqual(EdgeProvider._rate(0.8), "-20%")
+        self.assertEqual(EdgeProvider._rate(1.0), "+0%")
+        self.assertEqual(EdgeProvider._rate(1.25), "+25%")
+
+    def test_missing_package_gives_actionable_error(self):
+        """没装 edge_tts 时要给出能照做的提示，而不是一串 traceback。"""
+        import asyncio
+        import importlib.util
+
+        if importlib.util.find_spec("edge_tts") is not None:
+            self.skipTest("环境里已装 edge_tts")
+        provider = EdgeProvider({"timeout": 10})
+        with self.assertRaises(SpeechError) as ctx:
+            asyncio.get_event_loop().run_until_complete(
+                provider.synthesize(SpeechRequest(text="你好", voice="zh-CN-XiaoxiaoNeural"))
+            )
+        self.assertFalse(ctx.exception.retryable)
+        self.assertIn("edge", str(ctx.exception))
 
 
 class OpenAIProviderTests(unittest.TestCase):

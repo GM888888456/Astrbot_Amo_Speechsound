@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import time
 import uuid
@@ -39,15 +38,7 @@ _REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
 #: 让 NapCat 自己去转 SILK，比自己生成 SILK 再发要可靠。
 BREEZE_FORMAT = "wav"
 OPENAI_FORMAT = "wav"
-EDGE_FORMAT = "riff-24khz-16bit-mono-pcm"
-
-#: Edge 朗读接口的固定客户端令牌（公开值，微软各客户端都在用）。
-EDGE_TRUSTED_TOKEN = "6A5AA1D4EAFF4E9FB37E23D68491D6F4"
-EDGE_WS_URL = (
-    "wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1"
-)
-EDGE_ORIGIN = "chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold"
-WIN_EPOCH = 11644473600
+EDGE_FORMAT = "audio-24khz-48kbitrate-mono-mp3"
 
 
 class SpeechError(Exception):
@@ -486,12 +477,16 @@ class OpenAIProvider(_HTTPProvider):
 class EdgeProvider(_HTTPProvider):
     """微软 Edge 朗读：免费、零配置，只做兜底。
 
-    走的是客户端同一条 WebSocket 协议。它没有 ``instructions``、没有情绪，
-    音色也是固定的，所以定位很明确：**主后端不行时，别让用户看到报错。**
+    这里**不自己实现协议**：微软那边用 ``Sec-MS-GEC`` 做了 DRM 签名，签名算法
+    来自 GPL 的 ``edge-tts`` 项目，抄进来会把本插件的 MIT 协议污染掉。所以只在
+    运行时可选地调用 ``edge_tts`` 包——装了就用，没装就给一句能看懂的提示。
+
+    它没有 ``instructions``、没有情绪、音色固定，定位很明确：主后端不行时，
+    别让用户看到报错。
     """
 
     name = "edge"
-    default_format = EDGE_FORMAT
+    default_format = "audio-24khz-48kbitrate-mono-mp3"
 
     #: 常用中文音色。面板里列出来给人选，不额外请求微软的列表接口。
     VOICES = [
@@ -515,130 +510,42 @@ class EdgeProvider(_HTTPProvider):
         return [dict(item) for item in self.VOICES]
 
     @staticmethod
-    def _sec_ms_gec() -> str:
-        """微软用来防滥用的时间片令牌；算法与官方客户端一致，300 秒一跳。"""
-        ticks = (time.time() + WIN_EPOCH) * 10_000_000
-        ticks -= ticks % 3_000_000_000  # 300 秒
-        payload = f"{ticks:.0f}{EDGE_TRUSTED_TOKEN}"
-        return hashlib.sha256(payload.encode("ascii")).hexdigest().upper()
-
-    @staticmethod
-    def _ssml(text: str, voice: str, speed: float, volume: float) -> str:
-        def esc(value: str) -> str:
-            return (
-                value.replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace('"', "&quot;")
-            )
-
-        rate = f"{int(round((speed - 1.0) * 100)):+d}%" if abs(speed - 1.0) > 1e-6 else "+0%"
-        vol = f"{int(round((volume - 1.0) * 100)):+d}%" if abs(volume - 1.0) > 1e-6 else "+0%"
-        lang = voice.split("-")[0] + "-" + voice.split("-")[1] if voice.count("-") >= 2 else "zh-CN"
-        return (
-            "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='"
-            + lang
-            + "'>"
-            + f"<voice name='{esc(voice)}'>"
-            + f"<prosody rate='{rate}' volume='{vol}'>{esc(text)}</prosody>"
-            + "</voice></speak>"
-        )
+    def _rate(speed: float) -> str:
+        delta = int(round((speed - 1.0) * 100))
+        return f"{delta:+d}%"
 
     async def synthesize(self, request: SpeechRequest) -> SpeechResult:
-        if aiohttp is None:
-            raise SpeechError("缺少 aiohttp，Edge 兜底不可用。")
-        voice = request.voice or self.default_voice
-        fmt = request.format_for(self.default_format)
-        started = time.time()
-
-        url = (
-            EDGE_WS_URL
-            + "?TrustedClientToken=" + EDGE_TRUSTED_TOKEN
-            + "&Sec-MS-GEC=" + self._sec_ms_gec()
-            + "&Sec-MS-GEC-Version=1-130.0.2849.68"
-            + "&ConnectionId=" + uuid.uuid4().hex
-        )
-        headers = {
-            "Pragma": "no-cache",
-            "Cache-Control": "no-cache",
-            "Origin": EDGE_ORIGIN,
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0"
-            ),
-            "Accept-Encoding": "gzip, deflate, br",
-            "Accept-Language": "en-US,en;q=0.9",
-        }
-
-        # 每条消息前面有一段纯文本头，用 \r\n\r\n 与负载分开
-        config_msg = (
-            "Content-Type:application/json; charset=utf-8\r\n"
-            "Path:speech.config\r\n\r\n"
-            + json.dumps(
-                {
-                    "context": {
-                        "synthesis": {
-                            "audio": {
-                                "metadataoptions": {
-                                    "sentenceBoundaryEnabled": "false",
-                                    "wordBoundaryEnabled": "false",
-                                },
-                                "outputFormat": fmt,
-                            }
-                        }
-                    }
-                },
-                separators=(",", ":"),
-            )
-        )
-        ssml = self._ssml(request.text, voice, request.speed, request.volume)
-        ssml_msg = (
-            f"X-RequestId:{uuid.uuid4().hex}\r\n"
-            "Content-Type:application/ssml+xml\r\n"
-            f"X-Timestamp:{time.strftime('%a %b %d %Y %H:%M:%S GMT+0000 (Coordinated Universal Time)', time.gmtime())}Z\r\n"
-            "Path:ssml\r\n\r\n"
-            + ssml
-        )
-
-        chunks: list[bytes] = []
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.ws_connect(
-                    url,
-                    headers=headers,
-                    timeout=aiohttp.ClientWSTimeout(ws_close=self.timeout),
-                ) as ws:
-                    await ws.send_str(config_msg)
-                    await ws.send_str(ssml_msg)
-                    async for msg in ws:
-                        if msg.type == aiohttp.WSMsgType.BINARY:
-                            # 二进制帧：头 2 字节大端是头部长度，其后跳过头部
-                            data = msg.data
-                            if len(data) < 2:
-                                continue
-                            header_len = int.from_bytes(data[:2], "big")
-                            if header_len + 2 <= len(data):
-                                chunks.append(data[header_len + 2 :])
-                        elif msg.type == aiohttp.WSMsgType.TEXT:
-                            if "Path:turn.end" in msg.data:
-                                break
-                        elif msg.type in (
-                            aiohttp.WSMsgType.CLOSED,
-                            aiohttp.WSMsgType.CLOSING,
-                            aiohttp.WSMsgType.ERROR,
-                        ):
-                            raise SpeechError("Edge 朗读连接中断。")
+            import edge_tts
+        except ImportError as exc:
+            raise SpeechError(
+                "Edge 兜底要装 edge_tts 才能用：在容器里执行 pip install edge-tts。"
+                "（也可以按 README 配置任意一个 AstrBot 自带 TTS 作为兜底。）",
+                retryable=False,
+            ) from exc
+
+        voice = request.voice or self.default_voice
+        started = time.time()
+        kwargs: dict[str, Any] = {"text": request.text, "voice": voice}
+        if abs(request.speed - 1.0) > 1e-6:
+            kwargs["rate"] = self._rate(request.speed)
+
+        buffer = bytearray()
+        try:
+            communicate = edge_tts.Communicate(**kwargs)
+            async for chunk in communicate.stream():
+                if chunk.get("type") == "audio" and chunk.get("data"):
+                    buffer.extend(chunk["data"])
         except SpeechError:
             raise
         except BaseException as exc:  # noqa: BLE001
             raise self._wrap_transport(exc) from exc
 
-        audio = b"".join(chunks)
-        if not audio:
+        if not buffer:
             raise SpeechError("Edge 朗读返回了空音频。")
         return SpeechResult(
-            audio=audio,
-            fmt=fmt,
+            audio=bytes(buffer),
+            fmt=self.default_format,
             provider=self.name,
             voice=voice,
             elapsed=time.time() - started,
