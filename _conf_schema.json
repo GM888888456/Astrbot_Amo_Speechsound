@@ -90,8 +90,8 @@
   "auto_fallback": {
     "type": "bool",
     "description": "兜底转语音",
-    "default": false,
-    "hint": "关掉时完全由 Amo 决定（推荐）。打开后：用户明说「用语音说」但 Amo 只回了文字，插件自动把这条转成语音。"
+    "default": true,
+    "hint": "默认开：你明说「用语音说 / 念给我听」而 Amo 只回了文字时，插件直接补一条语音（不再打分）。"
   },
   "group_enable": {
     "type": "bool",
