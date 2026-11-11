@@ -80,7 +80,7 @@ except Exception:  # pragma: no cover - 直接以脚本方式加载时
     )
 
 PLUGIN_NAME = "Astrbot_Amo_Speechsound"
-PLUGIN_VERSION = "1.0.1"
+PLUGIN_VERSION = "1.0.2"
 DISPLAY_NAME = "我想和你说说话"
 
 #: 面板可以改的字段（白名单）。加字段时两边一起改。

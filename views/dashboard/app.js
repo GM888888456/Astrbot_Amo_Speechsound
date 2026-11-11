@@ -1,4 +1,14 @@
-const bridge = window.AstrBotPluginView || window.AstrBotPluginPage;
+/* AstrBot 把桥接 SDK 注入在 </body> 之前，比本文件执行晚：
+   所以不能在这里抓一次全局（那时还不存在），要每次调用时再去找。 */
+let bridge = null;
+
+function resolveBridge() {
+  const candidates = [];
+  try { candidates.push(window.AstrBotPluginView, window.AstrBotPluginPage); } catch (err) {}
+  try { candidates.push(window.parent.AstrBotPluginView, window.parent.AstrBotPluginPage); } catch (err) {}
+  try { candidates.push(window.top.AstrBotPluginView, window.top.AstrBotPluginPage); } catch (err) {}
+  return candidates.find((item) => item && typeof item.apiGet === "function") || null;
+}
 
 const $ = (id) => document.getElementById(id);
 
@@ -39,7 +49,8 @@ function offline() {
 }
 
 async function apiGet(path) {
-  if (offline()) return null;
+  bridge = bridge || resolveBridge();
+  if (!bridge) return null;
   try {
     return unwrap(await bridge.apiGet(path));
   } catch (err) {
@@ -49,7 +60,8 @@ async function apiGet(path) {
 }
 
 async function apiPost(path, body) {
-  if (offline()) return null;
+  bridge = bridge || resolveBridge();
+  if (!bridge) return null;
   try {
     return unwrap(await bridge.apiPost(path, body || {}));
   } catch (err) {
@@ -417,3 +429,21 @@ if (document.querySelector('.tab[data-tab="voices"]').classList.contains("on")) 
   loadVoices();
 }
 setInterval(loadStatus, 30000);
+
+/* 桥接 SDK 比本文件晚执行：等它出现再补一次真正的加载，否则首屏永远是空的。 */
+(function waitForBridgeAndLoad(retries) {
+  bridge = bridge || resolveBridge();
+  if (bridge) {
+    console.info("[面板] 桥接已就绪，开始加载");
+    loadStatus();
+    loadConfig();
+    loadVoices();
+    loadHistory();
+    return;
+  }
+  if (retries > 0) {
+    setTimeout(() => waitForBridgeAndLoad(retries - 1), 120);
+    return;
+  }
+  console.warn("[面板] 6 秒内没等到 AstrBot 桥接，面板处于离线态（接口全部跳过）");
+})(50);
