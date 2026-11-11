@@ -132,6 +132,10 @@ $("testBtn").addEventListener("click", async () => {
   btn.disabled = true;
   $("testMeta").textContent = "合成中…";
   const data = await apiPost("test", { text });
+  if (data && data.code === 1) {
+    $("testMeta").textContent = "试听失败：" + (data.message || "未知原因");
+    return;
+  }
   btn.disabled = false;
   if (!data || !data.audio) {
     $("testMeta").textContent = "失败：" + ((data && data.message) || "没有返回音频");
@@ -222,7 +226,16 @@ $("save").addEventListener("click", async () => {
     return;
   }
   $("api_key").value = "";
-  $("saveHint").textContent = res.saved ? "已保存并落盘。" : "已应用到内存（本次重启前有效）。";
+  const bits = [res.saved ? "已保存并落盘。" : "已应用到内存（本次重启前有效）。"];
+  if (res.api_key_masked) {
+    $("keyHint").textContent = "已保存：" + res.api_key_masked + "（留空不修改）";
+  }
+  if (res.key_status === "ok") {
+    bits.push("key 校验通过。");
+  } else if (res.key_status) {
+    bits.push("key 校验未通过（" + res.key_status + "），去控制台换一个新的再保存。");
+  }
+  $("saveHint").textContent = bits.join(" ");
   loadStatus();
 });
 
@@ -274,7 +287,11 @@ async function pullVoices() {
   const res = await apiPost("voices/pull", {});
   btn.disabled = false;
   if (!res) {
-    $("voiceHint").textContent = "拉取失败：没有响应。";
+    $("voiceHint").textContent = "拉取失败：面板桥接没回话（没有响应）。";
+    return;
+  }
+  if (res.code === 1) {
+    $("voiceHint").textContent = "拉取失败：" + (res.message || "未知原因");
     return;
   }
   $("voiceHint").textContent = "拉到 " + (res.count || 0) + " 个音色（" + (res.provider || "?") + "）。";

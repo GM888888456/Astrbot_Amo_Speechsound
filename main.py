@@ -80,7 +80,7 @@ except Exception:  # pragma: no cover - 直接以脚本方式加载时
     )
 
 PLUGIN_NAME = "Astrbot_Amo_Speechsound"
-PLUGIN_VERSION = "1.0.0"
+PLUGIN_VERSION = "1.0.1"
 DISPLAY_NAME = "我想和你说说话"
 
 #: 面板可以改的字段（白名单）。加字段时两边一起改。
@@ -808,9 +808,12 @@ class SpeechSoundPlugin(Star):
 
     @staticmethod
     def _fail(message):
-        if error_response is not None:
+        # 桥接层把 4xx 当异常吞掉，前端只能显示「没有响应」；改成 200 + message，
+        # 面板才能显示真实原因（401 key 无效 / 404 地址错 / 没填 key 等）。
+        logger.warning("[amo_voice] 面板接口失败：%s" % message)
+        if json_response is not None:
             try:
-                return error_response(message)
+                return json_response({"code": 1, "message": message})
             except Exception:
                 pass
         return {"code": 1, "message": message}
@@ -921,7 +924,42 @@ class SpeechSoundPlugin(Star):
             return self._fail("保存失败：%s" % exc)
         self._drop_provider_cache()
         saved = await self._persist_config()
-        return self._json({"code": 0, "data": {"saved": saved, "applied": sorted(data)}})
+        return self._json(
+            {
+                "code": 0,
+                "data": {
+                    "saved": saved,
+                    "applied": sorted(data),
+                    "api_key_masked": self._mask_key(),
+                    "key_status": await self._check_key(),
+                },
+            }
+        )
+
+    async def _check_key(self) -> str:
+        """顺手校验 breeze 的 key，返回 ok / empty / 401 AUTH_REQUIRED / error: ..."""
+        if self._str("provider") != "breeze":
+            return ""
+        key = self._str("api_key").strip()
+        if not key:
+            return "empty"
+        provider = self._provider()
+        base = str(getattr(provider, "api_base", "") or "https://api.breeze.blue").rstrip("/")
+        try:
+            status, _headers, body = await provider._request(
+                "GET",
+                base + "/v1/api-keys/current",
+                headers={"xi-api-key": key, "accept": "application/json"},
+            )
+        except BaseException as exc:  # noqa: BLE001
+            return "error: %s" % exc
+        if status == 200:
+            return "ok"
+        try:
+            detail = json.loads(body.decode("utf-8", "replace"))
+            return "%s %s" % (status, detail.get("code") or detail.get("detail") or "")
+        except Exception:
+            return str(status)
 
     async def api_clear_key(self):
         """面板里清空已保存的密钥。

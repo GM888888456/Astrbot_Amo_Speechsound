@@ -256,7 +256,10 @@ class BreezeProvider(_HTTPProvider):
 
     def __init__(self, settings: dict[str, Any]) -> None:
         super().__init__(settings)
-        self.api_base = (self.api_base or BREEZE_DEFAULT_BASE).rstrip("/")
+        base = (self.api_base or BREEZE_DEFAULT_BASE).strip().rstrip("/")
+        if base.endswith("/v1"):
+            base = base[: -len("/v1")]
+        self.api_base = base or BREEZE_DEFAULT_BASE
         self.default_voice = str(settings.get("default_voice") or "").strip()
 
     def _headers(self) -> dict[str, str]:
