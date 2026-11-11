@@ -660,9 +660,14 @@ class SpeechSoundPlugin(Star):
         }
         self._remember(entry)
         if not self._bool("dual_output", False):
-            # 让 on_decorating_result 知道这段文字已经用语音发过了，别再重复发一遍
+            # 让 on_decorating_result 知道这段文字已经用语音发过了，别再重复发一遍。
+            # 这层记录只在同一条事件的生命周期里有用，攒多了要清，免得长跑漏内存。
             try:
-                self._pending_voice[str(id(event))] = spoken
+                key = str(id(event))
+                self._pending_voice[key] = spoken
+                if len(self._pending_voice) > 32:
+                    for stale in list(self._pending_voice)[: len(self._pending_voice) - 32]:
+                        self._pending_voice.pop(stale, None)
             except Exception:
                 pass
         logger.info(
@@ -773,9 +778,9 @@ class SpeechSoundPlugin(Star):
             decision = decide(self._context_for(event, text), manual=False)
             if not decision.allowed:
                 return
-            if await self.speak(event, text, manual=False, source="fallback"):
-                # speak 内部已经把语音发出去了；这条文字留着，别让用户等
-                return
+            # speak 内部会把语音发出去；文字照常留着，别让用户等一条语音
+            await self.speak(event, text, manual=False, source="fallback")
+
         except Exception as exc:  # noqa: BLE001
             logger.debug("[amo_voice] 兜底判断失败: %s" % exc)
 
