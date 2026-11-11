@@ -244,7 +244,7 @@ def score_speech(ctx: SpeakContext, text: str) -> tuple[float, list[str]]:
     return max(0.0, min(1.0, score)), tags
 
 
-def decide(ctx: SpeakContext, *, manual: bool = False) -> Decision:
+def decide(ctx: SpeakContext, *, manual: bool = False, ignore_score: bool = False) -> Decision:
     """判断这条要不要发语音。
 
     ``manual=True`` 表示 Amo 主动调用（工具调用）：只拦硬伤，不拦阈值。
@@ -288,7 +288,7 @@ def decide(ctx: SpeakContext, *, manual: bool = False) -> Decision:
             clean,
             tags + ["冷却"],
         )
-    if score < ctx.threshold:
+    if not ignore_score and score < ctx.threshold:
         return Decision(
             False,
             f"分数 {score:.2f} 低于阈值 {ctx.threshold:.2f}",

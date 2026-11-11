@@ -101,9 +101,9 @@
   },
   "daily_quota": {
     "type": "int",
-    "description": "每天语音条数上限",
-    "default": 40,
-    "hint": "按会话算，防止额度被烧穿。0 = 不限。"
+    "description": "群聊每天语音条数上限",
+    "default": 10,
+    "hint": "所有群共用这一份额度，防止群里刷语音；私聊不限量、不占这个额度。0 = 不限。"
   },
   "cooldown_seconds": {
     "type": "int",

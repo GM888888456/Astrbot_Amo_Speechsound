@@ -80,7 +80,7 @@ except Exception:  # pragma: no cover - 直接以脚本方式加载时
     )
 
 PLUGIN_NAME = "Astrbot_Amo_Speechsound"
-PLUGIN_VERSION = "1.0.3"
+PLUGIN_VERSION = "1.1.0"
 DISPLAY_NAME = "我想和你说说话"
 
 #: 面板可以改的字段（白名单）。加字段时两边一起改。
@@ -276,8 +276,11 @@ class SpeechSoundPlugin(Star):
         except Exception as exc:
             logger.debug("[amo_voice] 音色缓存写入失败: %s" % exc)
 
-    def _quota_left(self) -> int:
-        quota = self._int("daily_quota", 40)
+    def _quota_left(self, private: bool = False) -> int:
+        """私聊不限量（用户自己承担成本）；群聊所有群共用一份每日额度。"""
+        if private:
+            return -1
+        quota = self._int("daily_quota", 10)
         if quota <= 0:
             return -1
         if self._state.get("date") != _today():
@@ -286,16 +289,31 @@ class SpeechSoundPlugin(Star):
             self._save_state()
         return max(0, quota - int(self._state.get("count") or 0))
 
-    def _bump_usage(self, umo: str = "") -> None:
+    def _bump_usage(self, umo: str = "", private: bool = False) -> None:
         if self._state.get("date") != _today():
             self._state["date"] = _today()
             self._state["count"] = 0
-        self._state["count"] = int(self._state.get("count") or 0) + 1
+        if not private:
+            self._state["count"] = int(self._state.get("count") or 0) + 1
         self._state["last_ts"] = _now()
         if umo:
             per = self._state.setdefault("last_ts_by_umo", {})
             per[str(umo)] = self._state["last_ts"]
         self._save_state()
+
+    def _spawn(self, coro):
+        """把合成丢到后台，别卡住主回复。"""
+        try:
+            task = asyncio.create_task(coro)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[amo_voice] 后台任务启动失败: %s" % exc)
+            return None
+        tasks = getattr(self, "_tasks", None)
+        if tasks is None:
+            tasks = self._tasks = set()
+        tasks.add(task)
+        task.add_done_callback(tasks.discard)
+        return task
 
     def _remember(self, entry: dict[str, Any]) -> None:
         items = self._state.setdefault("history", [])
@@ -453,7 +471,7 @@ class SpeechSoundPlugin(Star):
             text=text,
             private=bool(event.is_private_chat()),
             hour=now.hour,
-            quota_left=self._quota_left(),
+            quota_left=self._quota_left(bool(event.is_private_chat())),
             seconds_since_last=(_now() - last_ts) if last_ts else 1e9,
             cooldown=self._int("cooldown_seconds", 240),
             private_cooldown=self._int("private_cooldown_seconds", 0),
@@ -671,7 +689,7 @@ class SpeechSoundPlugin(Star):
             return {"ok": False, "reason": "发送失败：%s" % exc}
 
         elapsed = int((_now() - started) * 1000)
-        self._bump_usage(self._session_key(event))
+        self._bump_usage(self._session_key(event), bool(event.is_private_chat()))
         entry = {
             "ts": _now(),
             "allowed": True,
@@ -686,6 +704,12 @@ class SpeechSoundPlugin(Star):
             "score": round(decision.score, 2),
         }
         self._remember(entry)
+        self._state["last_voice"] = {
+            "ts": _now(),
+            "text": spoken[:60],
+            "scene": decision.scene,
+        }
+        self._save_state()
         if not self._bool("dual_output", False):
             # 让 on_decorating_result 知道这段文字已经用语音发过了，别再重复发一遍。
             # 这层记录只在同一条事件的生命周期里有用，攒多了要清，免得长跑漏内存。
@@ -740,17 +764,20 @@ class SpeechSoundPlugin(Star):
         """
         if not text.strip():
             return "没有要念的内容。"
-        result = await self.speak(
-            event,
-            text,
-            instructions=mood.strip() or None,
-            scene=scene.strip() or None,
-            manual=True,
-            source="tool",
+        decision = decide(self._context_for(event, text), manual=True)
+        if not decision.allowed:
+            return "这条没能发成语音：%s。用文字回复就行。" % decision.reason
+        self._spawn(
+            self.speak(
+                event,
+                text,
+                instructions=mood.strip() or None,
+                scene=scene.strip() or decision.scene,
+                manual=True,
+                source="tool",
+            )
         )
-        if result.get("ok"):
-            return f"已经把这句话用语音发出去了（{result.get('scene')}）。不要再重复发同一句。"
-        return f"这条没能发成语音：{result.get('reason')}。用文字回复就行。"
+        return "这句话已经在后台用语音说出去了（%s）。不要重复发同一句。" % (decision.scene or "default")
 
     # ------------------------------------------------------------------
     # 指令
@@ -802,11 +829,12 @@ class SpeechSoundPlugin(Star):
             if not self._user_asked_for_voice(event):
                 return
 
-            decision = decide(self._context_for(event, text), manual=False)
+            decision = decide(self._context_for(event, text), manual=False, ignore_score=True)
             if not decision.allowed:
+                logger.info("[amo_voice] 兜底不放行：%s" % decision.reason)
                 return
-            # speak 内部会把语音发出去；文字照常留着，别让用户等一条语音
-            await self.speak(event, text, manual=False, source="fallback")
+            # 用户明说要语音 → 不再打分，直接后台合成；文字照常留着
+            self._spawn(self.speak(event, text, manual=False, source="fallback"))
 
         except Exception as exc:  # noqa: BLE001
             logger.debug("[amo_voice] 兜底判断失败: %s" % exc)
@@ -819,6 +847,29 @@ class SpeechSoundPlugin(Star):
             return False
         words = ("语音", "发条音", "念给我", "读给我", "读一下", "说句话", "说给我听", "用声音")
         return any(word in body for word in words)
+
+    @filter.on_llm_request()
+    async def on_llm_request(self, event: AstrMessageEvent, req):
+        """把「刚才发过语音」塞进本轮临时上下文，别让她一问三不知。"""
+        try:
+            entry = self._state.get("last_voice") or {}
+            ts = float(entry.get("ts") or 0)
+            if not ts or _now() - ts > 1800:
+                return
+            minutes = max(1, int((_now() - ts) // 60))
+            text = str(entry.get("text") or "").strip()[:60]
+            scene = str(entry.get("scene") or "").strip()
+            body = (
+                "【你刚才的动作】%d 分钟前你用语音说了「%s」%s。已经发出去了："
+                "别再说自己发不了语音，也别把同一句再念一遍。"
+                % (minutes, text, ("（%s）" % scene) if scene else "")
+            )
+            parts = getattr(req, "extra_user_content_parts", None)
+            if parts is None:
+                return
+            parts.append({"type": "text", "text": body, "_no_save": True})
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[amo_voice] 注入语音动作提示失败: %s" % exc)
 
     # ------------------------------------------------------------------
     # 面板接口
