@@ -142,7 +142,8 @@ class SpeakContext:
     hour: int = 12
     quota_left: int = -1            # -1 = 不限
     seconds_since_last: float = 1e9  # 距上一条语音多久
-    cooldown: int = 240
+    cooldown: int = 240            # 群聊冷却（秒）
+    private_cooldown: int = 0      # 私聊冷却；0 = 私聊不冷却
     group_enable: bool = False
     max_chars: int = 80          # 每段字数上限
     max_segments: int = 2        # 最多几段；总长上限 = max_chars * max_segments
@@ -150,6 +151,15 @@ class SpeakContext:
     relation: str = ""              # 普通 / 熟识 / 亲近
     place: str = ""                 # 家 / 公司 / 外面
     activity: str = ""
+
+    @property
+    def effective_cooldown(self) -> int:
+        """私聊默认不冷却，群聊才用 cooldown_seconds。"""
+        value = self.private_cooldown if self.private else self.cooldown
+        try:
+            return max(0, int(value or 0))
+        except Exception:
+            return 0
 
     @property
     def at_home(self) -> bool:
@@ -264,14 +274,15 @@ def decide(ctx: SpeakContext, *, manual: bool = False) -> Decision:
     score, tags = score_speech(ctx, clean)
 
     if manual:
-        if ctx.cooldown > 0 and ctx.seconds_since_last < ctx.cooldown:
+        if ctx.effective_cooldown > 0 and ctx.seconds_since_last < ctx.effective_cooldown:
             score = max(score, 0.0)
         return Decision(True, "Amo 主动开口", max(score, 0.7), scene, clean, tags + ["主动"])
 
-    if ctx.cooldown > 0 and ctx.seconds_since_last < ctx.cooldown:
+    cd = ctx.effective_cooldown
+    if cd > 0 and ctx.seconds_since_last < cd:
         return Decision(
             False,
-            f"冷却中：距上一条语音不到 {ctx.cooldown} 秒",
+            f"冷却中：距上一条语音不到 {cd} 秒（" + ("私聊" if ctx.private else "群聊") + "）",
             score,
             scene,
             clean,

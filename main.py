@@ -80,7 +80,7 @@ except Exception:  # pragma: no cover - 直接以脚本方式加载时
     )
 
 PLUGIN_NAME = "Astrbot_Amo_Speechsound"
-PLUGIN_VERSION = "1.0.2"
+PLUGIN_VERSION = "1.0.3"
 DISPLAY_NAME = "我想和你说说话"
 
 #: 面板可以改的字段（白名单）。加字段时两边一起改。
@@ -88,7 +88,8 @@ WEB_EDITABLE = (
     "enable", "provider", "api_base", "api_key", "model_id", "default_voice",
     "language_code", "instructions_default", "speed", "volume", "timeout",
     "max_chars", "max_segments", "speak_threshold", "auto_fallback",
-    "group_enable", "daily_quota", "cooldown_seconds", "dual_output",
+    "group_enable", "daily_quota", "cooldown_seconds", "private_cooldown_seconds",
+    "dual_output",
     "keep_audio", "edge_fallback", "edge_voice", "read_relation", "schedule_aware",
 )
 WEB_BOOL_KEYS = frozenset(
@@ -97,7 +98,10 @@ WEB_BOOL_KEYS = frozenset(
         "keep_audio", "edge_fallback", "read_relation", "schedule_aware",
     }
 )
-WEB_INT_KEYS = frozenset({"timeout", "max_chars", "max_segments", "daily_quota", "cooldown_seconds"})
+WEB_INT_KEYS = frozenset(
+    {"timeout", "max_chars", "max_segments", "daily_quota", "cooldown_seconds",
+     "private_cooldown_seconds"}
+)
 WEB_FLOAT_KEYS = frozenset({"speed", "volume", "speak_threshold"})
 
 HISTORY_LIMIT = 60
@@ -238,6 +242,7 @@ class SpeechSoundPlugin(Star):
         self._state.setdefault("date", _today())
         self._state.setdefault("count", 0)
         self._state.setdefault("last_ts", 0)
+        self._state.setdefault("last_ts_by_umo", {})
         self._state.setdefault("scene_voices", {})
         self._state.setdefault("history", [])
         if self._state.get("date") != _today():
@@ -281,12 +286,15 @@ class SpeechSoundPlugin(Star):
             self._save_state()
         return max(0, quota - int(self._state.get("count") or 0))
 
-    def _bump_usage(self) -> None:
+    def _bump_usage(self, umo: str = "") -> None:
         if self._state.get("date") != _today():
             self._state["date"] = _today()
             self._state["count"] = 0
         self._state["count"] = int(self._state.get("count") or 0) + 1
         self._state["last_ts"] = _now()
+        if umo:
+            per = self._state.setdefault("last_ts_by_umo", {})
+            per[str(umo)] = self._state["last_ts"]
         self._save_state()
 
     def _remember(self, entry: dict[str, Any]) -> None:
@@ -419,10 +427,28 @@ class SpeechSoundPlugin(Star):
                 pass
         return out
 
+    @staticmethod
+    def _session_key(event: AstrMessageEvent) -> str:
+        """一个会话一个 key：冷却按会话算，私聊一条不再连带群聊。"""
+        for attr in ("unified_msg_origin", "umo"):
+            try:
+                value = getattr(event, attr, "")
+                value = value() if callable(value) else value
+                if value:
+                    return str(value)
+            except Exception:
+                continue
+        try:
+            return str(event.get_session_id() or "")
+        except Exception:
+            return ""
+
     def _context_for(self, event: AstrMessageEvent, text: str) -> SpeakContext:
         snap = self._companion_snapshot(event)
         now = datetime.now()
-        last_ts = float(self._state.get("last_ts") or 0)
+        key = self._session_key(event)
+        per = self._state.get("last_ts_by_umo") or {}
+        last_ts = float(per.get(key) or 0)
         return SpeakContext(
             text=text,
             private=bool(event.is_private_chat()),
@@ -430,6 +456,7 @@ class SpeechSoundPlugin(Star):
             quota_left=self._quota_left(),
             seconds_since_last=(_now() - last_ts) if last_ts else 1e9,
             cooldown=self._int("cooldown_seconds", 240),
+            private_cooldown=self._int("private_cooldown_seconds", 0),
             group_enable=self._bool("group_enable", False),
             max_chars=self._int("max_chars", 80),
             max_segments=max(1, self._int("max_segments", 2)),
@@ -644,7 +671,7 @@ class SpeechSoundPlugin(Star):
             return {"ok": False, "reason": "发送失败：%s" % exc}
 
         elapsed = int((_now() - started) * 1000)
-        self._bump_usage()
+        self._bump_usage(self._session_key(event))
         entry = {
             "ts": _now(),
             "allowed": True,

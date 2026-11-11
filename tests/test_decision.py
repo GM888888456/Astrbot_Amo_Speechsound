@@ -109,8 +109,28 @@ class DecideTests(unittest.TestCase):
         result = decide(ctx(text="晚安啦", seconds_since_last=1, cooldown=240), manual=True)
         self.assertTrue(result.allowed)
 
-    def test_auto_blocked_by_cooldown(self):
+    def test_auto_blocked_by_cooldown_in_group(self):
+        # 冷却只对群聊生效
+        result = decide(
+            ctx(text="晚安啦", seconds_since_last=1, cooldown=240,
+                private=False, group_enable=True),
+            manual=False,
+        )
+        self.assertFalse(result.allowed)
+        self.assertIn("冷却", result.reason)
+
+    def test_private_ignores_cooldown(self):
+        # 私聊默认不冷却：4 分钟前刚发过一条，这里照样能发
         result = decide(ctx(text="晚安啦", seconds_since_last=1, cooldown=240), manual=False)
+        self.assertTrue(result.allowed)
+        self.assertNotIn("冷却", result.reason)
+
+    def test_private_custom_cooldown_still_works(self):
+        # 真想给私聊限流，private_cooldown_seconds 一填就又生效
+        result = decide(
+            ctx(text="晚安啦", seconds_since_last=1, cooldown=240, private_cooldown=120),
+            manual=False,
+        )
         self.assertFalse(result.allowed)
         self.assertIn("冷却", result.reason)
 

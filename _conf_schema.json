@@ -107,9 +107,15 @@
   },
   "cooldown_seconds": {
     "type": "int",
-    "description": "两条语音最小间隔（秒）",
+    "description": "群聊两条语音最小间隔（秒）",
     "default": 240,
-    "hint": "防止连着刷语音。"
+    "hint": "只对群聊生效，防群里刷语音。私聊看下面那条，默认 0 不冷却。"
+  },
+  "private_cooldown_seconds": {
+    "type": "int",
+    "description": "私聊两条语音最小间隔（秒）",
+    "default": 0,
+    "hint": "0 = 私聊不冷却（推荐，一对一没必要限流）。想限流再填秒数。"
   },
   "dual_output": {
     "type": "bool",
