@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""我想和你说说话（Astrbot_Amo_Speechsound）：给陪伴插件配一副声音。
+"""我想永远陪着你-语音（Astrbot_Amo_Speechsound）：给陪伴插件配一副声音。
 
-这是「我想永远陪伴你」「我想永远记住你」「我想和你度日常」之后的第四块：
+这是「我想永远陪着你-终端」「我想永远陪着你-记忆」「我想永远陪着你-相片」之后的第四块：
 **只负责出声**。不参与聊天判定、不改 AstrBot 核心链路。
 
 它和一般 TTS 插件的区别在于"谁决定说话"：
@@ -80,8 +80,8 @@ except Exception:  # pragma: no cover - 直接以脚本方式加载时
     )
 
 PLUGIN_NAME = "Astrbot_Amo_Speechsound"
-PLUGIN_VERSION = "1.1.2"
-DISPLAY_NAME = "我想和你说说话"
+PLUGIN_VERSION = "1.1.3"
+DISPLAY_NAME = "我想永远陪着你-语音"
 
 #: 面板可以改的字段（白名单）。加字段时两边一起改。
 WEB_EDITABLE = (

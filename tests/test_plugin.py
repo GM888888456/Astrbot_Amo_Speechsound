@@ -48,6 +48,8 @@ def _install_stubs():
         llm_tool = _decorator
         command = _decorator
         on_decorating_result = _decorator
+        on_llm_response = _decorator
+        on_llm_request = _decorator
 
     class AstrMessageEvent:
         pass
@@ -224,7 +226,8 @@ class WorkflowTests(PluginTestBase):
             self.plugin.speak(event, "晚安啦，今天辛苦了")
         )
         self.assertTrue(result["ok"], result)
-        self.assertEqual(self.plugin._state["count"], 1)
+        # 私聊不占群聊额度（1.1.0 起私聊不限量），所以 count 不动
+        self.assertEqual(self.plugin._state.get("count", 0), 0)
         self.assertTrue(event.sent)
         self.assertEqual(self.plugin._state["history"][0]["allowed"], True)
 
@@ -245,14 +248,17 @@ class WorkflowTests(PluginTestBase):
         self.assertFalse(result["ok"])
         self.assertIn("群聊", result["reason"])
 
-    def test_quota_exhausted(self):
+    def test_quota_exhausted_in_group(self):
+        """额度只管群聊：所有群共用一份，私聊不占。"""
         self.config["daily_quota"] = 1
-        event = FakeEvent()
+        self.config["group_enable"] = True
         self.assertTrue(
-            asyncio.get_event_loop().run_until_complete(self.plugin.speak(event, "晚安"))["ok"]
+            asyncio.get_event_loop().run_until_complete(
+                self.plugin.speak(FakeEvent(private=False), "晚安")
+            )["ok"]
         )
         second = asyncio.get_event_loop().run_until_complete(
-            self.plugin.speak(FakeEvent(), "晚安")
+            self.plugin.speak(FakeEvent(private=False), "晚安")
         )
         self.assertFalse(second["ok"])
         self.assertIn("额度", second["reason"])
