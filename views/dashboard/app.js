@@ -454,7 +454,13 @@ function amoLinkDot(ok) { return '<span style="color:' + (ok ? "#2e9e5b" : "#d83
 function amoLinkRender(d) {
   const box = document.getElementById("linkbar");
   if (!box) return;
-  if (!d) { box.textContent = "连接状态：读不到（面板没连上本插件接口）"; return; }
+  box.onclick = null;
+  if (!d) {
+    // 失败要能自己说明白、能点重试，别只留一句「读不到」
+    box.innerHTML = '连接状态：读取失败（health 接口没响应，<span style="text-decoration:underline;cursor:pointer">点这里重试</span>）';
+    box.onclick = () => amoLinkLoad();
+    return;
+  }
   const hb = (typeof d.last_heartbeat === "number" && d.last_heartbeat >= 0)
     ? ("心跳 " + d.last_heartbeat + " 秒前") : "从未连上过";
   box.innerHTML = [
@@ -472,6 +478,8 @@ async function amoLinkFetch() {
 async function amoLinkLoad() {
   // 面板脚本比 AstrBot 的桥接先跑，头几次拿不到数据是正常的：
   // 等桥接就绪再重试，别一上来就把「读不到」画给人看。
+  const box = document.getElementById("linkbar");
+  if (box && /检查中|读取失败/.test(box.textContent || "")) box.textContent = "连接状态：读取中…";
   for (let i = 0; i < 20; i += 1) {
     const d = await amoLinkFetch();
     if (d) { amoLinkRender(d); return; }
