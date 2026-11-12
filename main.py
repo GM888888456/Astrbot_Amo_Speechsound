@@ -79,8 +79,13 @@ except Exception:  # pragma: no cover - 直接以脚本方式加载时
         EdgeProvider,
     )
 
+try:
+    from .link import probe as _link_probe, summary as _link_summary
+except Exception:  # pragma: no cover
+    from link import probe as _link_probe, summary as _link_summary  # type: ignore
+
 PLUGIN_NAME = "Astrbot_Amo_Speechsound"
-PLUGIN_VERSION = "1.1.3"
+PLUGIN_VERSION = "1.2.0"
 DISPLAY_NAME = "我想永远陪着你-语音"
 
 #: 面板可以改的字段（白名单）。加字段时两边一起改。
@@ -989,6 +994,7 @@ class SpeechSoundPlugin(Star):
     def _register_web_apis(self) -> None:
         routes = [
             ("/status", self.api_status, ["GET"]),
+            ("/health", self.api_health, ["GET"]),
             ("/config", self.api_config, ["GET"]),
             ("/config/save", self.api_save_config, ["POST"]),
             ("/config/clear_key", self.api_clear_key, ["POST"]),
@@ -1017,12 +1023,17 @@ class SpeechSoundPlugin(Star):
             % (DISPLAY_NAME, PLUGIN_VERSION, len(routes), len(self._voices.get("items") or []))
         )
 
+    async def api_health(self):
+        """我自己连没连上终端/记忆库。面板顶部那一行就看这个。"""
+        return self._json({"code": 0, "data": _link_probe(self)})
+
     async def api_status(self):
         items = self._voices.get("items") or []
         return self._json(
             {
                 "code": 0,
                 "data": {
+                    "link": _link_probe(self),
                     "name": PLUGIN_NAME,
                     "version": PLUGIN_VERSION,
                     "display_name": DISPLAY_NAME,

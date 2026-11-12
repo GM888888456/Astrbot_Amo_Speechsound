@@ -447,3 +447,27 @@ setInterval(loadStatus, 30000);
   }
   console.warn("[面板] 6 秒内没等到 AstrBot 桥接，面板处于离线态（接口全部跳过）");
 })(50);
+
+/* ---- 连接状态：我这个挂载插件自己有没有连上终端/记忆库 ---- */
+function amoLinkDot(ok) { return '<span style="color:' + (ok ? "#2e9e5b" : "#d83b3b") + '">\u25cf</span>'; }
+function amoLinkRender(d) {
+  const box = document.getElementById("linkbar");
+  if (!box) return;
+  if (!d) { box.textContent = "连接状态：读不到（面板没连上本插件接口）"; return; }
+  const hb = (typeof d.last_heartbeat === "number" && d.last_heartbeat >= 0)
+    ? ("心跳 " + d.last_heartbeat + " 秒前") : "从未连上过";
+  box.innerHTML = [
+    amoLinkDot(d.terminal_connected) + " 终端" + (d.terminal_connected ? " v" + (d.terminal_version || "?") : " 未连接"),
+    amoLinkDot(d.data_connected) + " 记忆库" + (d.data_connected ? " v" + (d.data_version || "?") : " 未连接"),
+    "bot_id " + (d.bot_id || "\u2014"),
+    hb
+  ].join(' <span style="opacity:.35">\uff5c</span> ');
+  box.title = d.error || "";
+}
+
+async function amoLinkLoad() {
+  try { amoLinkRender(await apiGet("health")); } catch (e) { amoLinkRender(null); }
+}
+
+amoLinkLoad();
+setInterval(amoLinkLoad, 30000);
