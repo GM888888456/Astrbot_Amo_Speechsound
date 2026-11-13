@@ -1,13 +1,13 @@
 :root {
   color-scheme: light;
   --bg: #f4f4f6;
-  --card: #ffffff;
+  --card: #f4f4f6;
   --line: #e7e2f0;
   --text: #2c2738;
   --muted: #857d94;
   --pink: #e8489a;
   --pink-soft: rgba(232, 72, 154, .12);
-  --ok: #0f9d58;
+  --ok: #0284c7;
   --bad: #d93025;
   --hover: #ece6f2;
 }
@@ -15,13 +15,13 @@
 html[data-theme="dark"] {
   color-scheme: dark;
   --bg: #1e1e22;
-  --card: #26262c;
+  --card: #1e1e22;
   --line: #3a3a40;
   --text: #f3eff8;
   --muted: #a89fb8;
   --pink: #f472b6;
   --pink-soft: rgba(244, 114, 182, .16);
-  --ok: #34d399;
+  --ok: #38bdf8;
   --bad: #fb7185;
   --hover: #2a2434;
 }
@@ -123,6 +123,8 @@ textarea:focus { outline: none; border-color: var(--pink); }
 }
 
 .btn:disabled { opacity: .55; cursor: default; }
+
+.save-top { padding: 7px 16px; font-size: 12.5px; }
 
 .link {
   border: none;
