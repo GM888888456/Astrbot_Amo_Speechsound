@@ -86,7 +86,7 @@ except Exception:  # pragma: no cover
     from link import probe as _link_probe, summary as _link_summary  # type: ignore
 
 PLUGIN_NAME = "Astrbot_Amo_Speechsound"
-PLUGIN_VERSION = "1.3.4"
+PLUGIN_VERSION = "1.3.5"
 DISPLAY_NAME = "我想永远陪着你-语音"
 
 #: 面板可以改的字段（白名单）。加字段时两边一起改。
@@ -1036,7 +1036,6 @@ class SpeechSoundPlugin(Star):
             ("/voices/pull", self.api_pull_voices, ["POST"]),
             ("/voices/scene", self.api_set_scene_voice, ["POST"]),
             ("/history", self.api_history, ["GET"]),
-            ("/test", self.api_test, ["POST"]),
         ]
         for path, handler, methods in routes:
             try:

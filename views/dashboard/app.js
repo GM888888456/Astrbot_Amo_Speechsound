@@ -137,31 +137,6 @@ async function loadStatus() {
     Math.round((data.uptime_seconds || 0) / 60) + " 分钟";
 }
 
-/* ---------- 试听 ---------- */
-
-$("testBtn").addEventListener("click", async () => {
-  const text = ($("testText").value || "").trim();
-  const btn = $("testBtn");
-  btn.disabled = true;
-  $("testMeta").textContent = "合成中…";
-  const data = await apiPost("test", { text });
-  if (data && data.code === 1) {
-    $("testMeta").textContent = "试听失败：" + (data.message || "未知原因");
-    return;
-  }
-  btn.disabled = false;
-  if (!data || !data.audio) {
-    $("testMeta").textContent = "失败：" + ((data && data.message) || "没有返回音频");
-    return;
-  }
-  const audio = $("testAudio");
-  audio.src = data.audio;
-  audio.hidden = false;
-  audio.play().catch(() => {});
-  $("testMeta").textContent =
-    Math.round(data.bytes / 1024) + "KB · " + data.elapsed_ms + "ms · " + data.provider + " · " + data.voice;
-});
-
 /* ---------- 配置 ---------- */
 
 function fillConfig(data) {
