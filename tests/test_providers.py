@@ -108,7 +108,7 @@ class BreezeTests(unittest.TestCase):
         with self.assertRaises(SpeechError):
             import asyncio
 
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 self.provider(api_key="").synthesize(SpeechRequest(text="你好"))
             )
 
@@ -133,7 +133,7 @@ class EdgeTests(unittest.TestCase):
             self.skipTest("环境里已装 edge_tts")
         provider = EdgeProvider({"timeout": 10})
         with self.assertRaises(SpeechError) as ctx:
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 provider.synthesize(SpeechRequest(text="你好", voice="zh-CN-XiaoxiaoNeural"))
             )
         self.assertFalse(ctx.exception.retryable)

@@ -7,6 +7,11 @@
 
 > 念什么、什么时候念、用什么语气念，由她自己决定。
 
+## 1.3.3（包初始化兼容单测 + 测试去弃用写法）
+
+- `__init__.py` 加绝对导入回退，pytest/CI 非包加载也能收集。
+- 测试里 23 处 `asyncio.get_event_loop().run_until_complete()` 换成 `asyncio.run()`，不再吃 DeprecationWarning。
+
 ## 1.3.2（Amo 要语音就一定出声）
 
 - Amo 明确要求语音时按 `manual` 口径判定，不再用 0.55 的分数门槛把自己拦回去（踩过坑：分数 0.00 →「该出声时没出声」）。

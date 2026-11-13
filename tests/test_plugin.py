@@ -222,7 +222,7 @@ class PluginTestBase(unittest.TestCase):
 class WorkflowTests(PluginTestBase):
     def test_speaks_and_records(self):
         event = FakeEvent()
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             self.plugin.speak(event, "晚安啦，今天辛苦了")
         )
         self.assertTrue(result["ok"], result)
@@ -233,7 +233,7 @@ class WorkflowTests(PluginTestBase):
 
     def test_blocked_records_reason(self):
         event = FakeEvent()
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             self.plugin.speak(event, "嗯" * 200)
         )
         self.assertFalse(result["ok"])
@@ -242,7 +242,7 @@ class WorkflowTests(PluginTestBase):
 
     def test_group_blocked(self):
         event = FakeEvent(private=False)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             self.plugin.speak(event, "晚安啦")
         )
         self.assertFalse(result["ok"])
@@ -253,11 +253,11 @@ class WorkflowTests(PluginTestBase):
         self.config["daily_quota"] = 1
         self.config["group_enable"] = True
         self.assertTrue(
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 self.plugin.speak(FakeEvent(private=False), "晚安")
             )["ok"]
         )
-        second = asyncio.get_event_loop().run_until_complete(
+        second = asyncio.run(
             self.plugin.speak(FakeEvent(private=False), "晚安")
         )
         self.assertFalse(second["ok"])
@@ -266,7 +266,7 @@ class WorkflowTests(PluginTestBase):
     def test_total_limit_is_chars_times_segments(self):
         self.config["max_segments"] = 1
         self.config["max_chars"] = 12
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             self.plugin.speak(FakeEvent(), "第一句话真的。第二句话也是。")
         )
         self.assertFalse(result["ok"])
@@ -275,7 +275,7 @@ class WorkflowTests(PluginTestBase):
     def test_long_text_split_into_segments(self):
         self.config["max_chars"] = 10
         self.config["max_segments"] = 3
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             self.plugin.speak(FakeEvent(), "第一句话。第二句话。第三句话。")
         )
         self.assertTrue(result["ok"], result)
@@ -286,7 +286,7 @@ class WorkflowTests(PluginTestBase):
             raise SpeechError("HTTP 401：invalid key", status=401, retryable=False)
 
         self.plugin._synthesize = boom  # type: ignore[assignment]
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             self.plugin.speak(FakeEvent(), "晚安啦")
         )
         self.assertFalse(result["ok"])
@@ -294,18 +294,18 @@ class WorkflowTests(PluginTestBase):
 
     def test_scene_voice_override(self):
         self.plugin._state["scene_voices"] = {"sleep": "voc_sleep"}
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             self.plugin.speak(FakeEvent(), "晚安，早点睡")
         )
         self.assertEqual(self._calls[0][2], "voc_sleep")
 
     def test_instructions_default_used(self):
         self.config["instructions_default"] = "小声一点"
-        asyncio.get_event_loop().run_until_complete(self.plugin.speak(FakeEvent(), "晚安啦"))
+        asyncio.run(self.plugin.speak(FakeEvent(), "晚安啦"))
         self.assertEqual(self._calls[0][3], "小声一点")
 
     def test_audio_file_created(self):
-        asyncio.get_event_loop().run_until_complete(self.plugin.speak(FakeEvent(), "晚安啦"))
+        asyncio.run(self.plugin.speak(FakeEvent(), "晚安啦"))
         files = os.listdir(self.plugin._audio_dir())
         self.assertTrue(any(name.startswith("voice-") for name in files))
 
@@ -341,7 +341,7 @@ class FallbackTests(PluginTestBase):
 
         self.context.get_using_tts_provider_async = getter  # type: ignore[attr-defined]
 
-        result, used = asyncio.get_event_loop().run_until_complete(
+        result, used = asyncio.run(
             self.real_synthesize("晚安", "sleep", "voc_1", "困")
         )
         self.assertEqual(used, "framework")
@@ -356,7 +356,7 @@ class FallbackTests(PluginTestBase):
 
         self.plugin._provider = lambda: Primary()  # type: ignore[assignment]
         with self.assertRaises(SpeechError):
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 self.real_synthesize("晚安", "sleep", "voc_1", "困")
             )
 
@@ -367,20 +367,20 @@ class PanelTests(PluginTestBase):
         self.assertTrue(any("status" in route for route in self.context.routes))
 
     def test_status_payload(self):
-        data = asyncio.get_event_loop().run_until_complete(self.plugin.api_status())
+        data = asyncio.run(self.plugin.api_status())
         self.assertEqual(data["code"], 0)
         self.assertEqual(data["data"]["name"], plugin_main.PLUGIN_NAME)
         self.assertIn("quota_left", data["data"])
 
     def test_config_hides_key(self):
         self.config["api_key"] = "brz_secret_value"
-        data = asyncio.get_event_loop().run_until_complete(self.plugin.api_config())
+        data = asyncio.run(self.plugin.api_config())
         self.assertEqual(data["data"]["api_key"], "")
         self.assertNotIn("brz_secret_value", json.dumps(data))
         self.assertIn("…", data["data"]["api_key_masked"])
 
     def test_test_endpoint_returns_data_uri(self):
-        data = asyncio.get_event_loop().run_until_complete(self.plugin.api_test())
+        data = asyncio.run(self.plugin.api_test())
         self.assertEqual(data["code"], 0)
         self.assertTrue(data["data"]["audio"].startswith("data:audio/"))
         raw = data["data"]["audio"].split(",", 1)[1]
@@ -388,7 +388,7 @@ class PanelTests(PluginTestBase):
 
     def test_scene_assignment_persists(self):
         plugin_main.web_request._payload = {"scene": "sleep", "voice": "voc_1"}
-        data = asyncio.get_event_loop().run_until_complete(self.plugin.api_set_scene_voice())
+        data = asyncio.run(self.plugin.api_set_scene_voice())
         self.assertEqual(data["code"], 0)
         self.assertEqual(self.plugin._state["scene_voices"]["sleep"], "voc_1")
         with open(self.plugin._state_path(), encoding="utf-8") as fh:
@@ -396,7 +396,7 @@ class PanelTests(PluginTestBase):
 
     def test_unknown_scene_rejected(self):
         plugin_main.web_request._payload = {"scene": "nope", "voice": "voc_1"}
-        data = asyncio.get_event_loop().run_until_complete(self.plugin.api_set_scene_voice())
+        data = asyncio.run(self.plugin.api_set_scene_voice())
         self.assertEqual(data["code"], 1)
 
 
@@ -404,7 +404,7 @@ class ConfigTests(PluginTestBase):
     def test_key_left_blank_not_overwritten(self):
         self.config["api_key"] = "brz_keep"
         plugin_main.web_request._payload = {"api_key": "", "speed": 1.1}
-        asyncio.get_event_loop().run_until_complete(self.plugin.api_save_config())
+        asyncio.run(self.plugin.api_save_config())
         self.assertEqual(self.config["api_key"], "brz_keep")
         self.assertAlmostEqual(self.config["speed"], 1.1)
 
@@ -412,12 +412,12 @@ class ConfigTests(PluginTestBase):
         self.config["api_key"] = "brz_keep"
         masked = self.plugin._mask_key()
         plugin_main.web_request._payload = {"api_key": masked}
-        asyncio.get_event_loop().run_until_complete(self.plugin.api_save_config())
+        asyncio.run(self.plugin.api_save_config())
         self.assertEqual(self.config["api_key"], "brz_keep")
 
     def test_bool_coercion(self):
         plugin_main.web_request._payload = {"dual_output": "true", "group_enable": 0}
-        asyncio.get_event_loop().run_until_complete(self.plugin.api_save_config())
+        asyncio.run(self.plugin.api_save_config())
         self.assertIs(self.config["dual_output"], True)
         self.assertIs(self.config["group_enable"], False)
 
@@ -426,13 +426,13 @@ class ClearKeyTests(PluginTestBase):
     def test_clear_key(self):
         self.config["api_key"] = "brz_secret"
         self.plugin._drop_provider_cache()
-        data = asyncio.get_event_loop().run_until_complete(self.plugin.api_clear_key())
+        data = asyncio.run(self.plugin.api_clear_key())
         self.assertEqual(data["code"], 0)
         self.assertEqual(self.config["api_key"], "")
 
     def test_clear_key_persists(self):
         self.config["api_key"] = "brz_secret"
-        asyncio.get_event_loop().run_until_complete(self.plugin.api_clear_key())
+        asyncio.run(self.plugin.api_clear_key())
         self.assertTrue(self.config.save_config())
 
 
