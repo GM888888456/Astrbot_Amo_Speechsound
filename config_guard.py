@@ -133,11 +133,11 @@ def heal(config, *, plugin_name: str, plugin_dir: str, data_dir: str,
     for key in extra_keys:
         if key not in keys:
             keys.append(key)
-    # 快照里的键也算：万一 schema 漏了某个键，至少这一轮还能补
+    # 快照里的键只认 schema 里还在的那些：
+    # schema 删掉的键＝功能已下线，绝不允许再从快照里复活（照片人设/模板那批就踩过）
     snap = load_snapshot(data_dir)
-    for key in snap:
-        if key not in keys:
-            keys.append(key)
+    allowed = set(keys)
+    snap = {key: value for key, value in snap.items() if key in allowed}
     report["keys"] = len(keys)
     if not keys:
         return report

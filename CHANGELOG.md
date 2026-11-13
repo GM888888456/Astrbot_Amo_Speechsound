@@ -1,5 +1,9 @@
 # 更新日志
 
+## 1.3.1（配置自愈不再复活已删除的键）
+
+- 同步 `config_guard` 修复：schema 里已经删掉的键（比如 `auto_fallback`）不会被快照补回配置。
+
 ## 1.3.0（只当执行者：不再自己认关键词补语音）
 
 - 删掉 `auto_fallback` 与 `_user_asked_for_voice()`：这一轮说不说、怎么说完全由陪伴插件（Amo）决定——它没标记 `amo_voice_reply_only`，本插件一个字都不出声。
