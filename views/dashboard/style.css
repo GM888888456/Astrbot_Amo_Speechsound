@@ -284,3 +284,11 @@ textarea:focus { outline: none; border-color: var(--pink); }
 .voice-item { display: flex; align-items: baseline; gap: 8px; }
 .voice-item .vname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .voice-item .vmeta { font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+/* 卡内分区：同一页里的多块内容用横线隔开，不再一人一个框 */
+.sep {
+  height: 1px;
+  margin: 14px 0 12px;
+  background: var(--line, rgba(128, 128, 128, .22));
+  border: 0;
+}

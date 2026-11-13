@@ -39,9 +39,7 @@
           <dt>陪伴插件</dt><dd id="companionState">—</dd>
         </dl>
         <div class="meta" id="statusMeta">加载中…</div>
-      </div>
-
-      <div class="card">
+      <div class="sep"></div>
         <div class="card-title"><span>试听</span><span class="hint" id="testHint">用当前音色说一句</span></div>
         <div class="field">
           <input id="testText" spellcheck="false" placeholder="你好呀，我是来试音的。" />
@@ -51,9 +49,7 @@
           <span class="hint" id="testMeta"></span>
         </div>
         <audio id="testAudio" controls hidden></audio>
-      </div>
-
-      <div class="card">
+      <div class="sep"></div>
         <div class="card-title"><span>她会怎么开口</span></div>
         <div class="meta" id="policyMeta">
           由 Amo 自己决定。她调用语音时插件只拦硬伤（太长 / 群聊没开 / 额度用完）。
@@ -102,9 +98,7 @@
           <div class="field"><label>每日条数</label><input id="daily_quota" type="number" min="0" /></div>
           <div class="field"><label>最小间隔（秒）</label><input id="cooldown_seconds" type="number" min="0" /></div>
         </div>
-      </div>
-
-      <div class="card">
+      <div class="sep"></div>
         <div class="card-title"><span>开关</span></div>
         <label class="check"><input type="checkbox" id="enable" /> 启用语音</label>
         <label class="check"><input type="checkbox" id="auto_fallback" /> 兜底转语音（用户明说要语音、但 Amo 只回了文字时补一条）</label>
@@ -137,9 +131,7 @@
         </div>
         <div class="meta" id="voiceHint">点「拉取」从账号读取可用音色，不用手抄 voice_id。</div>
         <ul class="list" id="voiceList"><li class="empty">还没有音色，先拉取</li></ul>
-      </div>
-
-      <div class="card">
+      <div class="sep"></div>
         <div class="card-title"><span>场景分配</span><span class="hint">不同场景用不同声音</span></div>
         <div class="hint" id="sceneHint">选一个场景，再点下面音色里的「设为这个场景」。</div>
         <div class="chips" id="sceneChips"></div>
