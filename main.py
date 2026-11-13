@@ -86,7 +86,7 @@ except Exception:  # pragma: no cover
     from link import probe as _link_probe, summary as _link_summary  # type: ignore
 
 PLUGIN_NAME = "Astrbot_Amo_Speechsound"
-PLUGIN_VERSION = "1.3.1"
+PLUGIN_VERSION = "1.3.2"
 DISPLAY_NAME = "我想永远陪着你-语音"
 
 #: 面板可以改的字段（白名单）。加字段时两边一起改。
@@ -940,6 +940,9 @@ class SpeechSoundPlugin(Star):
                     text = am.group(1).strip()
                 else:
                     text = re.sub(r"</?(?:astrbot_speak|amo_speak)\b[^>]*>", "", text).strip()
+            # 模型偶尔把框架标签/包装当正文（<text>…</text>、<astrbot_execute_python>…）：
+            # 只留说得出口的文字，别把标签念出来或发出去。
+            text = re.sub(r"</?(?:astrbot|amo|text)\b[^>]*>", "", text).strip()
             if not text:
                 return
 
@@ -962,9 +965,11 @@ class SpeechSoundPlugin(Star):
                 # 不许自己认关键词补语音（以前那套兜底等于第二个大脑）。
                 return
 
-            decision = decide(self._context_for(event, text), manual=False, ignore_score=True)
+            # Amo 已经决定了「这轮要用语音」：按手动口径走，
+            # 不再用 0.55 的分数门槛把它拦回去（踩过坑：分数 0.00 → 该出声时没出声）。
+            decision = decide(self._context_for(event, text), manual=True, ignore_score=True)
             if not decision.allowed:
-                logger.info("[amo_voice] 已按 Amo 要求合成，但被规则挡下：%s" % decision.reason)
+                logger.info("[amo_voice] 已按 Amo 要求合成，但被硬规则挡下：%s" % decision.reason)
                 return
             logger.info("[amo_voice] Amo 要求语音：%s" % text[:40])
             self._spawn(self._speak_safe(event, text, manual=False, source="amo"))
