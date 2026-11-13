@@ -7,6 +7,11 @@
 
 > 念什么、什么时候念、用什么语气念，由她自己决定。
 
+## 1.3.0（只当执行者：不再自己认关键词补语音）
+
+- 删掉 `auto_fallback` 与 `_user_asked_for_voice()`：这一轮说不说、怎么说完全由陪伴插件（Amo）决定——它没标记 `amo_voice_reply_only`，本插件一个字都不出声。
+- 保留「已经用语音说过就把重复文字撤掉」和「Amo 给的 `amo_voice_text` 优先」两条行为，聊天链路不受影响。
+
 ## 1.2.5（Amo 要求只发语音时不再静默）
 
 - `on_decorating_result` 兜底：事件带 `amo_voice_reply_only` 时不再看 `auto_fallback` 与关键词表，优先用 Amo 给的 `amo_voice_text` 合成。

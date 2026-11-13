@@ -87,12 +87,6 @@
     "default": 0.6,
     "hint": "0–1。越高越少开口。Amo 主动调用时不受这个限制，只受限硬规则。"
   },
-  "auto_fallback": {
-    "type": "bool",
-    "description": "兜底转语音",
-    "default": true,
-    "hint": "默认开：你明说「用语音说 / 念给我听」而 Amo 只回了文字时，插件直接补一条语音（不再打分）。"
-  },
   "group_enable": {
     "type": "bool",
     "description": "允许群聊发语音",

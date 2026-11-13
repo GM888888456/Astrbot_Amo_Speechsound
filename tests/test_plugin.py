@@ -416,9 +416,9 @@ class ConfigTests(PluginTestBase):
         self.assertEqual(self.config["api_key"], "brz_keep")
 
     def test_bool_coercion(self):
-        plugin_main.web_request._payload = {"auto_fallback": "true", "group_enable": 0}
+        plugin_main.web_request._payload = {"dual_output": "true", "group_enable": 0}
         asyncio.get_event_loop().run_until_complete(self.plugin.api_save_config())
-        self.assertIs(self.config["auto_fallback"], True)
+        self.assertIs(self.config["dual_output"], True)
         self.assertIs(self.config["group_enable"], False)
 
 
@@ -447,10 +447,6 @@ class HelperTests(PluginTestBase):
     def test_quota_left_unlimited(self):
         self.config["daily_quota"] = 0
         self.assertEqual(self.plugin._quota_left(), -1)
-
-    def test_user_asked_for_voice(self):
-        self.assertTrue(self.plugin._user_asked_for_voice(FakeEvent("用语音说这句")))
-        self.assertFalse(self.plugin._user_asked_for_voice(FakeEvent("今天吃什么")))
 
     def test_prune_keeps_recent(self):
         for index in range(plugin_main.AUDIO_KEEP + 4):

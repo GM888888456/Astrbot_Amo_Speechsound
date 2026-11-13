@@ -86,21 +86,21 @@ except Exception:  # pragma: no cover
     from link import probe as _link_probe, summary as _link_summary  # type: ignore
 
 PLUGIN_NAME = "Astrbot_Amo_Speechsound"
-PLUGIN_VERSION = "1.2.5"
+PLUGIN_VERSION = "1.3.0"
 DISPLAY_NAME = "我想永远陪着你-语音"
 
 #: 面板可以改的字段（白名单）。加字段时两边一起改。
 WEB_EDITABLE = (
     "enable", "provider", "api_base", "api_key", "model_id", "default_voice",
     "language_code", "instructions_default", "speed", "volume", "timeout",
-    "max_chars", "max_segments", "speak_threshold", "auto_fallback",
+    "max_chars", "max_segments", "speak_threshold",
     "group_enable", "daily_quota", "cooldown_seconds", "private_cooldown_seconds",
     "dual_output",
     "keep_audio", "edge_fallback", "edge_voice", "read_relation", "schedule_aware",
 )
 WEB_BOOL_KEYS = frozenset(
     {
-        "enable", "auto_fallback", "group_enable", "dual_output",
+        "enable", "group_enable", "dual_output",
         "keep_audio", "edge_fallback", "read_relation", "schedule_aware",
     }
 )
@@ -957,33 +957,20 @@ class SpeechSoundPlugin(Star):
                     return
 
             if not voice_only:
-                # 陪伴插件没标记“只发语音”时，才看兜底开关和关键词
-                if not self._bool("auto_fallback", False):
-                    return
-                if not self._user_asked_for_voice(event):
-                    return
+                # 中央集权：说不说、怎么说都由陪伴插件（Amo）决定。
+                # 它没标记「这轮只发语音」，这里就一个字都不出声——
+                # 不许自己认关键词补语音（以前那套兜底等于第二个大脑）。
+                return
 
             decision = decide(self._context_for(event, text), manual=False, ignore_score=True)
             if not decision.allowed:
-                logger.info("[amo_voice] 兜底不放行：%s" % decision.reason)
+                logger.info("[amo_voice] 已按 Amo 要求合成，但被规则挡下：%s" % decision.reason)
                 return
-            logger.info("[amo_voice] 兜底补语音：%s" % text[:40])
-            self._spawn(self._speak_safe(event, text, manual=False, source="fallback"))
+            logger.info("[amo_voice] Amo 要求语音：%s" % text[:40])
+            self._spawn(self._speak_safe(event, text, manual=False, source="amo"))
 
         except Exception as exc:  # noqa: BLE001
             logger.debug("[amo_voice] 兜底判断失败: %s" % exc)
-
-    @staticmethod
-    def _user_asked_for_voice(event: AstrMessageEvent) -> bool:
-        try:
-            body = str(getattr(event, "message_str", "") or "")
-        except Exception:
-            return False
-        words = (
-            "语音", "发条音", "念给我", "读给我", "读一下", "说句话", "说给我听",
-            "用声音", "你的声音", "想听你说", "想听听", "录音",
-        )
-        return any(word in body for word in words)
 
     @filter.on_llm_request()
     async def on_llm_request(self, event: AstrMessageEvent, req):
