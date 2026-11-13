@@ -22,6 +22,7 @@ import asyncio
 import base64
 import json
 import os
+import re
 import time
 from datetime import datetime
 from typing import Any
@@ -85,7 +86,7 @@ except Exception:  # pragma: no cover
     from link import probe as _link_probe, summary as _link_summary  # type: ignore
 
 PLUGIN_NAME = "Astrbot_Amo_Speechsound"
-PLUGIN_VERSION = "1.2.4"
+PLUGIN_VERSION = "1.2.5"
 DISPLAY_NAME = "我想永远陪着你-语音"
 
 #: 面板可以改的字段（白名单）。加字段时两边一起改。
@@ -919,12 +920,28 @@ class SpeechSoundPlugin(Star):
                 ).strip()
 
             captured, captured_ts = self._llm_text.pop(key, ("", 0.0))
+            voice_only = bool(getattr(event, "amo_voice_reply_only", False))
             if not text:
                 # 陪伴插件把 chain 清空了自己发 → 用 on_llm_response 留的那份
                 if captured and (_now() - captured_ts) < 180:
                     text = captured
                 else:
                     return
+            # 陪伴插件已经把「要念的纯文本」挑出来了，优先用它
+            hinted = str(getattr(event, "amo_voice_text", "") or "").strip()
+            if hinted:
+                text = hinted
+            # 模型偶尔把 <astrbot_speak text="..."> 当标签输出，别把标签念出来
+            m = re.search(r"<(?:astrbot_speak|amo_speak)\b([^>]*)>", text, re.I)
+            if m:
+                attr = m.group(1) or ""
+                am = re.search(r'text\s*=\s*"([^"]*)"', attr) or re.search(r"text\s*=\s*'([^']*)'", attr)
+                if am and am.group(1).strip():
+                    text = am.group(1).strip()
+                else:
+                    text = re.sub(r"</?(?:astrbot_speak|amo_speak)\b[^>]*>", "", text).strip()
+            if not text:
+                return
 
             # 这一轮已经出过声（amo_speak / 指令），别再补一条
             if key in self._spoken_events:
@@ -939,10 +956,12 @@ class SpeechSoundPlugin(Star):
                         result.chain = []
                     return
 
-            if not self._bool("auto_fallback", False):
-                return
-            if not self._user_asked_for_voice(event):
-                return
+            if not voice_only:
+                # 陪伴插件没标记“只发语音”时，才看兜底开关和关键词
+                if not self._bool("auto_fallback", False):
+                    return
+                if not self._user_asked_for_voice(event):
+                    return
 
             decision = decide(self._context_for(event, text), manual=False, ignore_score=True)
             if not decision.allowed:

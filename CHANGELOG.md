@@ -1,5 +1,10 @@
 # 更新日志
 
+## 1.2.5（Amo 要求只发语音时不再静默）
+
+- `on_decorating_result` 兜底：事件带 `amo_voice_reply_only` 时不再看 `auto_fallback` 与关键词表，优先用 Amo 给的 `amo_voice_text` 合成。
+- 文本里出现 `<astrbot_speak text="...">` 这类伪标签时先取出要念的话，不把标签念出来，也不会整条丢掉。
+
 ## 1.2.4（面板配色与终端统一）
 
 - 底色、面板、控件底统一成同一个颜色（浅色 #f4f4f6 / 深色 #1e1e22），卡片只留 1px 描边。
