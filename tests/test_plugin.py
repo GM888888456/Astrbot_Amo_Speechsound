@@ -248,6 +248,22 @@ class WorkflowTests(PluginTestBase):
         self.assertFalse(result["ok"])
         self.assertIn("群聊", result["reason"])
 
+    def test_amo_request_not_blocked_by_score(self):
+        """Amo 已经决定要语音，就别再被阈值拦一次。
+
+        线上 2026-11-14 20:45：兜底分支已经 decide(manual=True) 放行，进到
+        _speak_safe 又按默认口径打了 0.31 分 < 0.55，结果改发文字。
+        """
+        self.config["group_enable"] = True
+        self.config["speak_threshold"] = 0.95
+        event = FakeEvent(private=False)
+        text = "坏就坏嘛，你莫急，我在这儿陪着你呢，等下我拍一张给你看。"
+        scored = plugin_main.decide(self.plugin._context_for(event, text), manual=False)
+        self.assertFalse(scored.allowed)
+        self.assertIn("低于阈值", scored.reason)
+        result = asyncio.run(self.plugin.speak(event, text, manual=True, source="amo"))
+        self.assertTrue(result["ok"], result)
+
     def test_quota_exhausted_in_group(self):
         """额度只管群聊：所有群共用一份，私聊不占。"""
         self.config["daily_quota"] = 1

@@ -82,7 +82,7 @@ except Exception:  # pragma: no cover
     from link import probe as _link_probe  # type: ignore
 
 PLUGIN_NAME = "Astrbot_Amo_Speechsound"
-PLUGIN_VERSION = "1.3.8"
+PLUGIN_VERSION = "1.3.9"
 DISPLAY_NAME = "我想永远陪着你-语音"
 
 #: 面板可以改的字段（白名单）。加字段时两边一起改。
@@ -975,7 +975,10 @@ class SpeechSoundPlugin(Star):
                 logger.info("[amo_voice] 已按 Amo 要求合成，但被硬规则挡下：%s" % decision.reason)
                 return
             logger.info("[amo_voice] Amo 要求语音：%s" % text[:40])
-            self._spawn(self._speak_safe(event, text, manual=False, source="amo"))
+            # 上面已经按「Amo 要语音」放行过一次，这里必须沿用同一口径。
+            # 再走一遍默认打分会把低分句子拦回去（2026-11-14 线上：分数 0.31 < 0.55，
+            # Amo 明明要求语音，最后却「出不了声，改发文字」）。
+            self._spawn(self._speak_safe(event, text, manual=True, source="amo"))
 
         except Exception as exc:  # noqa: BLE001
             logger.debug("[amo_voice] 兜底判断失败: %s" % exc)
