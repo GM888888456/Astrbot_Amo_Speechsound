@@ -1,5 +1,11 @@
 # 更新日志
 
+## 1.3.6（清理死导入，README 补 1.3.5）
+
+- 删掉未使用导入：`uuid`、`detect_scene`、`sanitize_for_speech`、`link.summary` 别名。
+- README 补上 1.3.5 的说明：之前只改了 CHANGELOG，发版检查一直报 README 落后一个版本。
+
+
 ## 1.3.5（删掉试听）
 
 - 面板去掉「试听」区块（输入框、念一句、音频播放器），`/test` 接口下线；聊天里的 `speak` 工具照常。
