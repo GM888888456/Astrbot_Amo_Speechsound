@@ -82,7 +82,7 @@ except Exception:  # pragma: no cover
     from link import probe as _link_probe  # type: ignore
 
 PLUGIN_NAME = "Astrbot_Amo_Speechsound"
-PLUGIN_VERSION = "1.3.6"
+PLUGIN_VERSION = "1.3.7"
 DISPLAY_NAME = "我想永远陪着你-语音"
 
 #: 面板可以改的字段（白名单）。加字段时两边一起改。
