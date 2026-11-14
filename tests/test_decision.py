@@ -14,6 +14,7 @@ from decision import (  # noqa: E402
     detect_scene,
     instructions_for,
     sanitize_for_speech,
+    trim_to_limit,
     score_speech,
     split_text,
 )
@@ -174,6 +175,38 @@ class SceneTests(unittest.TestCase):
     def test_every_scene_has_instructions(self):
         for scene in SCENE_LABELS:
             self.assertTrue(instructions_for(scene), scene)
+
+
+class DsmlTests(unittest.TestCase):
+    """模型会把工具调用特殊标记当正文吐出来，念出来就是噪音。"""
+
+    def test_dsml_call_markup_is_dropped(self):
+        out = sanitize_for_speech("<｜｜DSML｜｜ calls> 今天好累啊，晚安。")
+        self.assertEqual(out, "今天好累啊，晚安。")
+
+    def test_dsml_end_token_is_dropped(self):
+        self.assertEqual(sanitize_for_speech("晚安 <｜end▁of▁sentence｜>"), "晚安")
+
+    def test_normal_text_untouched(self):
+        text = "今天好累啊，晚安。"
+        self.assertEqual(sanitize_for_speech(text), text)
+
+
+class TrimTests(unittest.TestCase):
+    """太长不该整条拒掉：按句读截到上限，至少让她说出一句。"""
+
+    def test_trim_keeps_whole_sentences(self):
+        text = "今天好累啊，我先去洗个澡。明天还要早起上班，先睡了，晚安。"
+        out = trim_to_limit(text, 20)
+        self.assertLessEqual(len(out), 20)
+        self.assertTrue(out.startswith("今天好累啊"))
+
+    def test_short_text_unchanged(self):
+        self.assertEqual(trim_to_limit("晚安。", 20), "晚安。")
+
+    def test_trim_falls_back_to_hard_cut(self):
+        out = trim_to_limit("一二三四五六七八九十甲乙丙丁", 5)
+        self.assertEqual(out, "一二三四五")
 
 
 if __name__ == "__main__":

@@ -41,12 +41,35 @@ _EMOJI_RE = re.compile(
 _SPEECH_UNFRIENDLY = ("```", "http://", "https://", "\\n\\n", "| ---", "<br")
 
 
+#: 模型会把工具调用特殊标记当正文吐出来（DeepSeek 的 <｜｜DSML｜｜ calls> 这种），
+#: 念出来是噪音，发出去也难看。
+_DSML_RE = re.compile(r"<[｜|][^<>]{0,120}>")
+_DSML_BARE_RE = re.compile(r"[｜|]{2}\s*DSML\s*[｜|]{2}[^<\n]{0,40}", re.I)
+
+
+def trim_to_limit(text: str, limit: int) -> str:
+    """超长时按句读切到上限内：宁可少念半句，也别整条语音被硬规则拒掉。"""
+    body = str(text or "").strip()
+    if not body or limit <= 0 or len(body) <= limit:
+        return body
+    out = ""
+    for piece in re.split(r"(?<=[。！？!?；;，,、])", body):
+        if not piece:
+            continue
+        if len(out) + len(piece) > limit:
+            break
+        out += piece
+    return (out or body[:limit]).strip()
+
+
 def sanitize_for_speech(text: str) -> str:
     """把模型输出清洗成"能念出来"的样子。
 
     去掉代码块、链接、Markdown 记号、@、emoji（念不出来），剩下的才是话。
     """
     text = text or ""
+    text = _DSML_RE.sub("", text)
+    text = _DSML_BARE_RE.sub("", text)
     text = _CODE_FENCE_RE.sub("", text)
     text = _INLINE_CODE_RE.sub("", text)
     text = _MD_LINK_RE.sub(r"\1", text)

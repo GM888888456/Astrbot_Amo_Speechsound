@@ -42,7 +42,7 @@ except Exception:  # pragma: no cover - 老版本没有该模块
     error_response = json_response = web_request = None
 
 try:
-    from .decision import (
+    from .decision import (trim_to_limit, 
         SCENE_LABELS,
         Decision,
         SpeakContext,
@@ -82,7 +82,7 @@ except Exception:  # pragma: no cover
     from link import probe as _link_probe  # type: ignore
 
 PLUGIN_NAME = "Astrbot_Amo_Speechsound"
-PLUGIN_VERSION = "1.3.7"
+PLUGIN_VERSION = "1.3.8"
 DISPLAY_NAME = "我想永远陪着你-语音"
 
 #: 面板可以改的字段（白名单）。加字段时两边一起改。
@@ -963,6 +963,13 @@ class SpeechSoundPlugin(Star):
 
             # Amo 已经决定了「这轮要用语音」：按手动口径走，
             # 不再用 0.55 的分数门槛把它拦回去（踩过坑：分数 0.00 → 该出声时没出声）。
+            # 太长不整条拒：按句读截到上限再念，否则她「只发语音」那轮就一句都发不出去
+            limit = max(1, self._int("max_chars", 80)) * max(1, self._int("max_segments", 2))
+            if len(text) > limit:
+                trimmed = trim_to_limit(text, limit)
+                if len(trimmed) >= 2:
+                    logger.info("[amo_voice] 太长，先念前 %d 字（原 %d 字）" % (len(trimmed), len(text)))
+                    text = trimmed
             decision = decide(self._context_for(event, text), manual=True, ignore_score=True)
             if not decision.allowed:
                 logger.info("[amo_voice] 已按 Amo 要求合成，但被硬规则挡下：%s" % decision.reason)
